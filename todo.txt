@@ -1,0 +1,6 @@
+1. Finish a Theano solver class
+that has train method, accuracy checking.
+2. Finish an optim file that has update rules
+(write at least sgd+momentum, rmsprop, and adam)
+3. Write the Word embedding passing and parameter passing
+in iPython Notebook (if it's possible and appropriate)
