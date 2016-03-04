@@ -78,7 +78,7 @@ class Solver(object):
         names to gradients of the loss with respect to those parameters.
     """
 
-    def __init__(self, model, data, **kwargs):
+    def __init__(self, model, data, symbolic_X, symbolic_y, **kwargs):
         """
             Construct a new Solver instance.
 
@@ -89,6 +89,11 @@ class Solver(object):
               'X_val': Array of shape (N_val, d_1, ..., d_k) giving validation images
               'y_train': Array of shape (N_train,) giving labels for training images
               'y_val': Array of shape (N_val,) giving labels for validation images
+
+            - symbolic_X: A theano symbolic variable like T.matrix('x') or T.tensor4('X')
+                          that corresponds to the shape of X passing in
+            - symbolic_y: A theano symbolic variable like T.ivector('y')
+                          that corresponds to the shape of y passing in
 
             Optional arguments:
             - update_rule: A string giving the name of an update rule in optim.py.

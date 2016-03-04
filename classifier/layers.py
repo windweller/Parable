@@ -9,20 +9,23 @@ import theano.tensor.shared_randomstreams
 import theano
 import theano.tensor as T
 from theano.tensor.signal import downsample
-from theano.tensor.nnet import conv2d
+from theano.tensor.nnet import conv2d, bn
 
-conv_relu = "conv_relu"
 conv = "conv"
+conv_relu = "conv_relu"
+conv_batch = "conv_batch"
+conv_batch_relu = "conv_batch_relu"
 max_pool = "max_pool"
+avg_pool = "avg_pool"
 affine_relu = "affine_relu"
 affine_softmax = "affine_softmax"
 
 
-def leaky_ReLU(x, a=5.5):
+def leaky_relu(x, a=100):
     out = T.maximum(x, 0.0)
     mask = x < 0.0
     leaking_x = x * mask  # elem-wise, leave negative elems
-    out += leaking_x * (1 / a)
+    out += leaking_x * (1.0 / a)
     return out
 
 
@@ -40,6 +43,120 @@ def affine_layer(x, w, b):
     out = T.dot(flattened_x, w) + b
 
     return out
+
+
+def batch_norm_layer(x, gamma, beta, bn_param):
+    """
+     Forward pass for batch normalization.
+
+     During training the sample mean and (uncorrected) sample variance are
+     computed from minibatch statistics and used to normalize the incoming data.
+     During training we also keep an exponentially decaying running mean of the mean
+     and variance of each feature, and these averages are used to normalize data
+     at test-time.
+
+     At each timestep we update the running averages for mean and variance using
+     an exponential decay based on the momentum parameter:
+
+     running_mean = momentum * running_mean + (1 - momentum) * sample_mean
+     running_var = momentum * running_var + (1 - momentum) * sample_var
+
+     Note that the batch normalization paper suggests a different test-time
+     behavior: they compute sample mean and variance for each feature using a
+     large number of training images rather than using a running average. For
+     this implementation we have chosen to use running averages instead since
+     they do not require an additional estimation step; the torch7 implementation
+     of batch normalization also uses running averages.
+
+     Input:
+     - x: Data of shape (N, D)
+     - gamma: Scale parameter of shape (D,)
+     - beta: Shift paremeter of shape (D,)
+     - bn_param: Dictionary with the following keys:
+       - mode: 'train' or 'test'; required
+       - eps: Constant for numeric stability
+       - momentum: Constant for running mean / variance.
+       - running_mean: Array of shape (D,) giving running mean of features
+       - running_var Array of shape (D,) giving running variance of features
+
+     Returns a tuple of:
+     - out: of shape (N, D) (Theano expression)
+     """
+
+    mode = bn_param['mode']
+    eps = bn_param.get('eps', 1e-5)
+    momentum = bn_param.get('momentum', 0.9)
+
+    batch_mean = T.mean(x, axis=0)
+    batch_var = T.var(x, axis=0)
+
+    running_mean = bn_param.get('running_mean', T.zeros_like(batch_mean))
+    running_var = bn_param.get('running_var', T.zeros_like(batch_var))
+
+    out = None
+
+    if mode == 'train':
+        # Compute output
+        xc = x - batch_mean
+        std = np.sqrt(batch_var + eps)
+        xn = xc / std
+        out = gamma * xn + beta
+
+        # Update running average of mean
+        running_mean *= momentum
+        running_mean += (1 - momentum) * batch_mean
+
+        # Update running average of variance
+        running_var *= momentum
+        running_var += (1 - momentum) * batch_var
+    elif mode == 'test':
+        # Using running mean and variance to normalize
+        std = np.sqrt(running_var + eps)
+        xn = (x - running_mean) / std
+        out = gamma * xn + beta
+    else:
+        raise ValueError('Invalid forward batchnorm mode "%s"' % mode)
+
+    # Store the updated running means (theano expressions) back into bn_param
+    bn_param['running_mean'] = running_mean
+    bn_param['running_var'] = running_var
+
+    return out
+
+
+def spatial_batch_norm_layer(x, gamma, beta, bn_param):
+    """
+    Same implementation as in Torch
+    Careful with Theano's dimshuffle
+
+    Inputs:
+    - x: Input data of shape (N, C, H, W)
+    - gamma: Scale parameter, of shape (C,)
+    - beta: Shift parameter, of shape (C,)
+    - bn_param: Dictionary with the following keys:
+      - mode: 'train' or 'test'; required
+      - eps: Constant for numeric stability
+      - momentum: Constant for running mean / variance. momentum=0 means that
+        old information is discarded completely at every time step, while
+        momentum=1 means that new information is never incorporated. The
+        default of momentum=0.9 should work well in most situations.
+      - running_mean: Array of shape (D,) giving running mean of features
+      - running_var Array of shape (D,) giving running variance of features
+
+    for normal x: (N, D)
+    gamma: shape of (D)
+    beta: shape of (D)
+
+    Returns a tuple of:
+    - out: Output data, of shape (N, C, H, W)
+    - cache: Values needed for the backward pass
+
+    """
+    out = None
+    # n_c = x.transpose(1, 0, 2, 3).reshape((C, N * H * W)).transpose()
+    # out = out.T.reshape((C, N, H, W)).transpose(1, 0, 2, 3)
+
+    n_c = x.dimshuffle(1, 0, 2, 3).flatten(outdim=2).T
 
 
 def softmax_layer(x, y):
@@ -96,7 +213,7 @@ def conv_layer(x, w, b, conv_param):
     return out
 
 
-def pooling_layer(x, pool_param):
+def max_pooling_layer(x, pool_param):
     """
 
     Args:
@@ -110,6 +227,32 @@ def pooling_layer(x, pool_param):
     pool_width = pool_param['pool_width']
     pool_out = downsample.max_pool_2d(x, (pool_width, pool_height), ignore_border=True)
     return pool_out
+
+
+def avg_pooling_layer(x, pool_param):
+    """
+    Perform average pooling instead of max
+    normally used at the end of a network
+    Args:
+        x:
+        pool_param:
+
+    Returns:
+
+    """
+    pool_height = pool_param['pool_height']
+    pool_width = pool_param['pool_width']
+    pool_out = downsample.max_pool_2d(x, (pool_width, pool_height), ignore_border=True, mode='average_exc_pad')
+    return pool_out
+
+
+def resnet_block_layer():
+    """
+    Forms a resnet block
+    2 conv layers, with beginning connect to bottom
+
+    Returns:
+    """
 
 
 class ConvNet(object):
@@ -129,6 +272,8 @@ class ConvNet(object):
             C: 1
             H: word_vector dim
             W: total word in a sentence (should be always the same)
+            (This is VERY CRUCIAL, not to get it wrong)
+
         - hidden_dim: Number of units to use in the fully-connected hidden layer
             We only have one in the end
         - num_classes: Number of scores to produce from the final affine layer.
@@ -152,7 +297,7 @@ class ConvNet(object):
         self.layer_param = []  # index match layer_label
         self.weight_scale = weight_scale
         self.reg = reg
-        self.i = 0  # number of layers, every time add one after using it
+        self.i = 0  # number of layers, every time add one after using it (IMPORTANT for solver!!)
 
     def initialize(self):
         """
@@ -162,21 +307,78 @@ class ConvNet(object):
         for k, v in self.params.iteritems():
             self.params[k] = v.astype(self.dtype)
 
-    def loss(self, x, y):
+    def loss(self, X, y=None):
         """
         This processes each stored layer and build up
         the computational graph
 
         We must assume a symbolic x and y, and they are not passing in
         Inputs:
-        - x: symbolic expression T.matrix('x')
+        - X: symbolic expression T.matrix('x')
         - y: symbolic expression T.ivector('y')
 
         Returns:
         - loss: symbolic expression, we no longer return grad
         """
 
-    def add_affine_relu_layer(self, prev_dim, hidden_dim):
+        mode = 'test' if y is None else 'train'
+
+        # if test, we override bn_param to 'test'
+
+        out = X
+
+        for i, label in enumerate(self.layer_label):
+            if label is conv_relu:
+                out = conv_layer(out, self.params['W' + str(i)],
+                                 self.params['b' + str(i)],
+                                 self.layer_param[i]['conv_param'])
+                out = leaky_relu(out, self.layer_param[i]['relu_a'])
+
+            elif label is conv_batch:
+                out = conv_layer(out, self.params['W' + str(i)],
+                                 self.params['b' + str(i)],
+                                 self.layer_param[i]['conv_param'])
+                out = batch_norm_layer(out, self.params['gamma' + str(i)],
+                                       self.params['beta' + str(i)],
+                                       self.layer_param[i]['bn_param'])
+
+            elif label is conv_batch_relu:
+                out = conv_layer(out, self.params['W' + str(i)],
+                                 self.params['b' + str(i)],
+                                 self.layer_param[i]['conv_param'])
+                out = batch_norm_layer(out, self.params['gamma' + str(i)],
+                                       self.params['beta' + str(i)],
+                                       self.layer_param[i]['bn_param'])
+                out = leaky_relu(out, self.layer_param[i]['relu_a'])
+
+            elif label is avg_pool:
+                out = avg_pooling_layer(out, self.layer_param[i]['pool_param'])
+
+            elif label is max_pool:
+                out = max_pooling_layer(out, self.layer_param[i]['pool_param'])
+
+            elif label is affine_relu:
+                out = affine_layer(out, self.params['W' + str(i)],
+                                   self.params['b' + str(i)])
+                out = leaky_relu(out, self.layer_param[i]['relu_a'])
+
+            elif label is affine_softmax:
+                out = affine_layer(out, self.params['W' + str(i)],
+                                   self.params['b' + str(i)])
+            else:
+                print "unknown layer: " + label
+                sys.exit(0)
+
+        if y is None:
+            return out  # those are the final scores
+
+        # an if in case we use other final algorithm like SVM
+        if self.layer_label[-1] is affine_softmax:
+            out = softmax_layer(out, y)  # this gets us the final loss
+
+        return out
+
+    def add_affine_relu_layer(self, prev_dim, hidden_dim, relu_a=100):
         """
         Args:
             prev_dim: the dimension of previous layer
@@ -197,10 +399,16 @@ class ConvNet(object):
             borrow=True
         )
         self.layer_label.append(affine_relu)
-        self.layer_param.append({})
+        self.layer_param.append({'relu_a': relu_a})
         self.i += 1
 
     def add_affine_softmax(self, prev_dim, num_classes):
+        """
+        Parameters
+        ----------
+        prev_dim: num_filters * max_pooled_affine_H *
+                                      max_pooled_affine_W
+        """
         self.params['W' + str(self.i)] = theano.shared(
             value=self.weight_scale * np.asarray(np.random.randn(
                 prev_dim, num_classes), dtype=self.dtype),
@@ -217,7 +425,15 @@ class ConvNet(object):
         self.layer_param.append({})
         self.i += 1
 
-    def add_conv_layer(self, number_filter, filter_size, pad, stride):
+    def add_conv_layer(self, number_filter, filter_size, pad, stride, inde_layer=True):
+        """
+
+        Args:
+            inde_layer: When flagged True, self.i will add 1
+
+        Returns:
+
+        """
         self.params['W' + str(self.i)] = theano.shared(
             value=self.weight_scale * np.asarray(np.random.randn(
                 number_filter,
@@ -237,14 +453,152 @@ class ConvNet(object):
 
         conv_param = {'stride': stride, 'pad': pad}
 
-        self.layer_label.append(conv)
-        self.layer_param.append(conv_param)
+        if inde_layer:
+            self.layer_label.append(conv)
+
+        if len(self.layer_param) == self.i:
+            # meaning: there is nothing in layer_param yet
+            # need to check if this part is working :(
+            self.layer_param.append({'conv_param': conv_param})
+        else:
+            self.layer_param[self.i]['conv_param'] = conv_param
+
+        if inde_layer:
+            self.i += 1
+
+    def add_conv_relu_layer(self, number_filter, filter_size, pad, stride, relu_a, inde_layer=True):
+        """
+
+        Args:
+            inde_layer: When flagged True, self.i will add 1
+
+        Returns:
+
+        """
+        self.params['W' + str(self.i)] = theano.shared(
+            value=self.weight_scale * np.asarray(np.random.randn(
+                number_filter,
+                self.prev_depth,
+                filter_size, filter_size), dtype=self.dtype),
+            name='W' + str(self.i),
+            borrow=True
+        )
+        self.params['b' + str(self.i)] = theano.shared(
+            value=np.zeros(number_filter, dtype=self.dtype),
+            name='b' + str(self.i),
+            borrow=True
+        )
+        self.prev_depth = number_filter
+        self.affine_H = 1 + (self.affine_H + 2 * pad - filter_size) / stride
+        self.affine_W = 1 + (self.affine_W + 2 * pad - filter_size) / stride
+
+        conv_param = {'stride': stride, 'pad': pad}
+
+        if inde_layer:
+            self.layer_label.append(conv_relu)
+
+        if len(self.layer_param) == self.i:
+            # meaning: there is nothing in layer_param yet
+            # need to check if this part is working :(
+            self.layer_param.append({'conv_param': conv_param,
+                                     'relu_a': relu_a})
+        else:
+            self.layer_param[self.i]['conv_param'] = conv_param
+            self.layer_param[self.i]['relu_a'] = relu_a
+
+        if inde_layer:
+            self.i += 1
+
+    def wrap_shared_var(self, numpy_var, name, borrow):
+        return theano.shared(
+            value=numpy_var,
+            name=name,
+            borrow=True
+        )
+
+    def add_leaky_relu_layer(self, relu_a):
+        """
+        ReLU layer's setting is just appending ReLU parameter: a
+        """
+        if len(self.layer_param) == self.i:
+            # meaning: there is nothing in layer_param yet
+            # need to check if this part is working :(
+            self.layer_param.append({'relu_a': relu_a})
+        else:
+            self.layer_param[self.i]['relu_a'] = relu_a
+
+    def add_batch_layer(self, number_filter):
+        """
+        BatchNorm is never an "independent" layer
+        (meaning it doesn't have W or b)
+        so we don't add label to anything
+
+        Args:
+            number_filter:
+
+        """
+
+        gamma = np.ones(number_filter, dtype=self.dtype)
+        beta = np.zeros(number_filter, dtype=self.dtype)
+
+        self.params['gamma' + str(self.i)] = self.wrap_shared_var(gamma,
+                                                                  'gamma' + str(self.i),
+                                                                  borrow=True)
+        self.params['beta' + str(self.i)] = self.wrap_shared_var(beta,
+                                                                 'beta' + str(self.i),
+                                                                 borrow=True)
+        bn_param = {'mode': 'train'}
+
+        if len(self.layer_param) == self.i:
+            # meaning: there is nothing in layer_param yet
+            # need to check if this part is working :(
+            self.layer_param.append({'bn_param': bn_param})
+        else:
+            self.layer_param[self.i]['bn_param'] = bn_param
+
+    def add_conv_batch_relu_layer(self, number_filter, filter_size, pad, stride, relu_a):
+        self.add_conv_layer(number_filter, filter_size, pad, stride, inde_layer=False)
+
+        # add batch norm
+        self.add_batch_layer(number_filter)
+
+        # add leaky relu
+        self.add_leaky_relu_layer(relu_a)
+
+        self.layer_label.append(conv_batch_relu)
         self.i += 1
 
-    def add_pool_layer(self, size):
+    def add_conv_batch_layer(self, number_filter, filter_size, pad, stride):
+        self.add_conv_layer(number_filter, filter_size, pad, stride, inde_layer=False)
+        self.add_batch_layer(number_filter)
+        self.layer_label.append(conv_batch)
+        self.i += 1
+
+    def add_res_block(self):
+        """
+        Res_block is composed of 2 conv layers
+        of same size
+        """
+        input_depth_dim = self.prev_depth
+
+    def add_jump_connect_res_block(self):
+        """
+        This is a custom resnet block.
+        """
+        pass
+
+    def add_pool_layer(self, size, mode='max'):
+        """
+        Args:
+            size: shrink size, size = 2, means shrink by half
+            mode: 'max' or 'avg'
+        """
         self.affine_H /= size
         self.affine_W /= size
-        self.layer_label.append(max_pool)
+        if mode == 'max':
+            self.layer_label.append(max_pool)
+        elif mode == 'avg':
+            self.layer_label.append(avg_pool)
         # pass pool_param to the forward pass for the max-pooling layer
         pool_param = {'pool_height': size, 'pool_width': size}
         self.layer_param.append({"pool_param": pool_param})
