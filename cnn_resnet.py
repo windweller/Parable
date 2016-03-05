@@ -24,6 +24,17 @@ import lasagne
 sys.setrecursionlimit(10000)
 
 
+def topKAccuracy(preds, targets, k=5):
+    topKacc = 0.0
+    sorted_preds = np.argsort(preds, axis=1)
+    for i in range(sorted_preds.shape[0]):
+        top5_preds = sorted_preds[i, -k:]
+        if targets[i] in top5_preds:
+            topKacc += 1
+    return topKacc * 1.0 / sorted_preds.shape[0]
+    # return np.mean(np.equal(np.argmax(preds,axis=1), targets)*1.0)
+
+
 # ##################### Load data from CIFAR-10 dataset #######################
 # this code assumes the cifar dataset from 'https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
 # has been extracted in current working directory
@@ -130,7 +141,6 @@ def residual_block(l, increase_dim=False, projection=False):
 
 
 def build_cnn(input_var=None, n=3):
-
     # Building the network
     l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
 
@@ -277,12 +287,14 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
                       dtype=theano.config.floatX)
 
     # Compile a second function computing the validation loss and accuracy:
-    val_fn = theano.function([input_var, target_var], [test_loss, test_acc])
+    val_fn = theano.function([input_var, target_var], [test_loss, test_acc, test_prediction])
 
     if model is None:
         # launch the training loop
         print("Starting training...")
         training_start_time = time.time()
+        best_val_acc = 0.0
+
         # We iterate over epochs:
         for epoch in range(num_epochs):
             # shuffle training data
@@ -304,30 +316,46 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
             val_err = 0
             val_acc = 0
             val_batches = 0
+            top5accuracy = 0.0
             for batch in iterate_minibatches(X_test, Y_test, 500, shuffle=False):
                 inputs, targets = batch
-                err, acc = val_fn(inputs, targets)
+                err, acc, test_prediction = val_fn(inputs, targets)
+                top5accuracy += topKAccuracy(test_prediction, targets)
                 val_err += err
                 val_acc += acc
                 val_batches += 1
 
             # Then we print the results for this epoch:
             print("Epoch {} of {} took {:.3f}m".format(
-                epoch + 1, num_epochs, (time.time() - start_time)/60.0))
+                epoch + 1, num_epochs, (time.time() - start_time) / 60.0))
             print("  training loss:\t\t{:.6f}".format(train_err / train_batches))
             print("  validation loss:\t\t{:.6f}".format(val_err / val_batches))
             print("  validation accuracy:\t\t{:.2f} %".format(
                 val_acc / val_batches * 100))
+            print(" top 5 validation accuracy:\t\t{:.2f} %".format(
+                top5accuracy / val_batches * 100
+            ))
 
             # adjust learning rate as in paper
             # 32k and 48k iterations should be roughly equivalent to 41 and 61 epochs
-            if (epoch + 1) == 41 or (epoch + 1) == 61:
-                new_lr = sh_lr.get_value() * 0.1
+            # if (epoch + 1) == 41 or (epoch + 1) == 61:
+            #     new_lr = sh_lr.get_value() * 0.1
+            #     print("New LR:" + str(new_lr))
+            #     sh_lr.set_value(lasagne.utils.floatX(new_lr))
+
+            # decay learning rate when a plateau is hit
+            # when overall validation acc becomes negative or increases smaller than 0.01
+            # we decay learning rate by 0.5
+            if (val_acc / val_batches) - best_val_acc < 0.01:
+                new_lr = sh_lr.get_value() * 0.8
                 print("New LR:" + str(new_lr))
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
 
+            if (val_acc / val_batches) > best_val_acc:
+                best_val_acc = val_acc / val_batches
+
         # print out total training time
-        print("Total training time: {:.3f}m".format((time.time() - training_start_time)/60.0))
+        print("Total training time: {:.3f}m".format((time.time() - training_start_time) / 60.0))
 
         # dump the network weights to a file :
         npz_file_name = ''
@@ -370,7 +398,7 @@ if __name__ == '__main__':
         print("MODEL: saved model file to load (for validation) (default: None)")
     else:
         kwargs = {}
-        epochs = 80
+        epochs = 90
         if len(sys.argv) > 1:
             kwargs['n'] = int(sys.argv[1])
         if len(sys.argv) > 2:
@@ -380,7 +408,7 @@ if __name__ == '__main__':
 
         kwargs['pwd'] = os.path.dirname(os.path.realpath(__file__))
 
-        kwargs['path'] = kwargs['pwd'] +'/data/tiny-imagenet-100-A'
+        kwargs['path'] = kwargs['pwd'] + '/data/tiny-imagenet-100-A'
         kwargs['data'] = 'tiny-image-net'
 
         kwargs['subsample'] = 1
