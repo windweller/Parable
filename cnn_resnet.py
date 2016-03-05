@@ -117,19 +117,19 @@ def residual_block(l, increase_dim=False, projection=False):
             projection = batch_norm(
                 ConvLayer(l, num_filters=out_num_filters, filter_size=(1, 1), stride=(2, 2), nonlinearity=None,
                           pad='same', b=None))
-            block = NonlinearityLayer(ElemwiseSumLayer([stack_2, projection]), nonlinearity=rectify)
+            block = NonlinearityLayer(ElemwiseSumLayer([stack_2, projection]), nonlinearity=None)
         else:
             # identity shortcut, as option A in paper
             identity = ExpressionLayer(l, lambda X: X[:, :, ::2, ::2], lambda s: (s[0], s[1], s[2] // 2, s[3] // 2))
             padding = PadLayer(identity, [out_num_filters // 4, 0, 0], batch_ndim=1)
-            block = NonlinearityLayer(ElemwiseSumLayer([stack_2, padding]), nonlinearity=rectify)
+            block = NonlinearityLayer(ElemwiseSumLayer([stack_2, padding]), nonlinearity=None)
     else:
-        block = NonlinearityLayer(ElemwiseSumLayer([stack_2, l]), nonlinearity=rectify)
+        block = NonlinearityLayer(ElemwiseSumLayer([stack_2, l]), nonlinearity=None)
 
     return block
 
 
-def build_cnn(input_var=None, n=5):
+def build_cnn(input_var=None, n=3):
 
     # Building the network
     l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
@@ -179,13 +179,13 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False, augment=False
         if augment:
             # as in paper : 
             # pad feature arrays with 4 pixels on each side
-            # and do random cropping of 32x32
+            # and do random cropping of 64x64
             padded = np.pad(inputs[excerpt], ((0, 0), (0, 0), (4, 4), (4, 4)), mode='constant')
             random_cropped = np.zeros(inputs[excerpt].shape, dtype=np.float32)
             crops = np.random.random_integers(0, high=8, size=(batchsize, 2))
             for r in range(batchsize):
-                random_cropped[r, :, :, :] = padded[r, :, crops[r, 0]:(crops[r, 0] + 32),
-                                             crops[r, 1]:(crops[r, 1] + 32)]
+                random_cropped[r, :, :, :] = padded[r, :, crops[r, 0]:(crops[r, 0] + 64),
+                                             crops[r, 1]:(crops[r, 1] + 64)]
             inp_exc = random_cropped
         else:
             inp_exc = inputs[excerpt]
@@ -195,7 +195,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False, augment=False
 
 # ############################## Main program ################################
 
-def main(n=5, num_epochs=30, model=None, **kwargs):
+def main(n=3, num_epochs=30, model=None, **kwargs):
     """
 
     Args:
@@ -326,7 +326,13 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
 
         # dump the network weights to a file :
-        np.savez('cifar10_deep_residual_model.npz', *lasagne.layers.get_all_param_values(network))
+        npz_file_name = ''
+        if data_name == 'cifar-10':
+            npz_file_name = 'cifar10_deep_residual_model.npz'
+        else:
+            npz_file_name = 'tiny_imagenet_a_epochs_' + str(num_epochs) + '_n_' + str(n) + "_model.npz"
+
+        np.savez(npz_file_name, *lasagne.layers.get_all_param_values(network))
     else:
         # load network weights from model file
         with np.load(model) as f:
@@ -369,5 +375,7 @@ if __name__ == '__main__':
 
         kwargs['path'] = kwargs['pwd'] +'/data/tiny-imagenet-100-A'
         kwargs['data'] = 'tiny-image-net'
+
+        kwargs['subsample'] = 0.1
 
         main(num_epochs=3, **kwargs)
