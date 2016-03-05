@@ -304,7 +304,7 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
             val_err = 0
             val_acc = 0
             val_batches = 0
-            for batch in iterate_minibatches(X_test, Y_test, 200, shuffle=False):
+            for batch in iterate_minibatches(X_test, Y_test, 500, shuffle=False):
                 inputs, targets = batch
                 err, acc = val_fn(inputs, targets)
                 val_err += err
@@ -370,7 +370,7 @@ if __name__ == '__main__':
         print("MODEL: saved model file to load (for validation) (default: None)")
     else:
         kwargs = {}
-        epochs = 86
+        epochs = 80
         if len(sys.argv) > 1:
             kwargs['n'] = int(sys.argv[1])
         if len(sys.argv) > 2:
