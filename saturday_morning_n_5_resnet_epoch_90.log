@@ -1,0 +1,211 @@
+Using gpu device 0: GRID K520 (CNMeM is enabled)
+/home/ubuntu/.local/lib/python2.7/site-packages/theano/tensor/signal/downsample.py:5: UserWarning: downsample module has been moved to the pool module.
+  warnings.warn("downsample module has been moved to the pool module.")
+Loading data...
+loading training data for synset 20 / 100
+loading training data for synset 40 / 100
+loading training data for synset 60 / 100
+loading training data for synset 80 / 100
+loading training data for synset 100 / 100
+Building model and compiling functions...
+number of parameters in model: 470004
+Starting training...
+Epoch 1 of 90 took 6.940m
+  training loss:		4.167365
+  validation loss:		3.805415
+  validation accuracy:		12.00 %
+ top 5 validation accuracy:		35.04 %
+Epoch 2 of 90 took 6.953m
+  training loss:		3.602829
+  validation loss:		3.328536
+  validation accuracy:		19.74 %
+ top 5 validation accuracy:		48.28 %
+Epoch 3 of 90 took 6.951m
+  training loss:		3.292475
+  validation loss:		2.995556
+  validation accuracy:		27.68 %
+ top 5 validation accuracy:		56.76 %
+Epoch 4 of 90 took 6.947m
+  training loss:		3.076439
+  validation loss:		2.791004
+  validation accuracy:		31.26 %
+ top 5 validation accuracy:		61.14 %
+Epoch 5 of 90 took 6.947m
+  training loss:		2.899691
+  validation loss:		2.741169
+  validation accuracy:		32.84 %
+ top 5 validation accuracy:		62.24 %
+Epoch 6 of 90 took 6.939m
+  training loss:		2.763297
+  validation loss:		2.537470
+  validation accuracy:		37.62 %
+ top 5 validation accuracy:		67.22 %
+Epoch 7 of 90 took 6.947m
+  training loss:		2.655055
+  validation loss:		2.630424
+  validation accuracy:		35.58 %
+ top 5 validation accuracy:		64.96 %
+New LR:0.0800000011921
+Epoch 8 of 90 took 6.943m
+  training loss:		2.488255
+  validation loss:		2.305826
+  validation accuracy:		42.10 %
+ top 5 validation accuracy:		72.06 %
+Epoch 9 of 90 took 6.930m
+  training loss:		2.410155
+  validation loss:		2.314921
+  validation accuracy:		42.40 %
+ top 5 validation accuracy:		72.14 %
+New LR:0.0639999985695
+Epoch 10 of 90 took 6.947m
+  training loss:		2.289061
+  validation loss:		2.087157
+  validation accuracy:		46.60 %
+ top 5 validation accuracy:		75.08 %
+Epoch 11 of 90 took 6.949m
+  training loss:		2.233131
+  validation loss:		2.173572
+  validation accuracy:		45.34 %
+ top 5 validation accuracy:		73.60 %
+New LR:0.0511999964714
+Epoch 12 of 90 took 6.941m
+  training loss:		2.116044
+  validation loss:		2.174233
+  validation accuracy:		46.24 %
+ top 5 validation accuracy:		74.86 %
+New LR:0.040959995985
+Epoch 13 of 90 took 6.928m
+  training loss:		2.008367
+  validation loss:		2.003929
+  validation accuracy:		50.72 %
+ top 5 validation accuracy:		76.94 %
+Epoch 14 of 90 took 6.929m
+  training loss:		1.971371
+  validation loss:		2.000213
+  validation accuracy:		50.26 %
+ top 5 validation accuracy:		77.14 %
+New LR:0.032767996192
+Epoch 15 of 90 took 6.929m
+  training loss:		1.875825
+  validation loss:		1.989064
+  validation accuracy:		50.40 %
+ top 5 validation accuracy:		77.72 %
+New LR:0.0262143969536
+Epoch 16 of 90 took 6.927m
+  training loss:		1.782928
+  validation loss:		1.910863
+  validation accuracy:		52.16 %
+ top 5 validation accuracy:		78.48 %
+Epoch 17 of 90 took 6.929m
+  training loss:		1.753562
+  validation loss:		1.925357
+  validation accuracy:		52.24 %
+ top 5 validation accuracy:		78.72 %
+New LR:0.0209715172648
+Epoch 18 of 90 took 6.933m
+  training loss:		1.677505
+  validation loss:		1.897387
+  validation accuracy:		53.46 %
+ top 5 validation accuracy:		78.68 %
+Epoch 19 of 90 took 6.946m
+  training loss:		1.647917
+  validation loss:		1.910180
+  validation accuracy:		52.52 %
+ top 5 validation accuracy:		78.76 %
+New LR:0.0167772144079
+Epoch 20 of 90 took 6.945m
+  training loss:		1.570348
+  validation loss:		1.861039
+  validation accuracy:		53.42 %
+ top 5 validation accuracy:		80.14 %
+New LR:0.0134217709303
+Epoch 21 of 90 took 6.947m
+  training loss:		1.500786
+  validation loss:		1.867783
+  validation accuracy:		54.02 %
+ top 5 validation accuracy:		79.70 %
+New LR:0.0107374168932
+Epoch 22 of 90 took 6.948m
+  training loss:		1.434515
+  validation loss:		1.835212
+  validation accuracy:		54.66 %
+ top 5 validation accuracy:		80.46 %
+New LR:0.00858993381262
+Epoch 23 of 90 took 6.939m
+  training loss:		1.384617
+  validation loss:		1.856254
+  validation accuracy:		55.12 %
+ top 5 validation accuracy:		80.28 %
+New LR:0.00687194690108
+Epoch 24 of 90 took 6.947m
+  training loss:		1.332115
+  validation loss:		1.848253
+  validation accuracy:		55.12 %
+ top 5 validation accuracy:		80.14 %
+New LR:0.00549755766988
+Epoch 25 of 90 took 6.940m
+  training loss:		1.288669
+  validation loss:		1.868714
+  validation accuracy:		55.62 %
+ top 5 validation accuracy:		80.56 %
+New LR:0.0043980460614
+Epoch 26 of 90 took 6.950m
+  training loss:		1.256187
+  validation loss:		1.860209
+  validation accuracy:		55.44 %
+ top 5 validation accuracy:		80.78 %
+New LR:0.00351843684912
+Epoch 27 of 90 took 6.938m
+  training loss:		1.217433
+  validation loss:		1.848237
+  validation accuracy:		55.18 %
+ top 5 validation accuracy:		80.58 %
+New LR:0.00281474944204
+Epoch 28 of 90 took 6.927m
+  training loss:		1.197652
+  validation loss:		1.860999
+  validation accuracy:		54.96 %
+ top 5 validation accuracy:		80.82 %
+New LR:0.00225179959089
+Epoch 29 of 90 took 6.926m
+  training loss:		1.177168
+  validation loss:		1.863863
+  validation accuracy:		55.70 %
+ top 5 validation accuracy:		81.04 %
+New LR:0.00180143974721
+Epoch 30 of 90 took 6.929m
+  training loss:		1.157647
+  validation loss:		1.868231
+  validation accuracy:		55.42 %
+ top 5 validation accuracy:		80.82 %
+New LR:0.00144115183502
+Epoch 31 of 90 took 6.931m
+  training loss:		1.142233
+  validation loss:		1.871836
+  validation accuracy:		55.70 %
+ top 5 validation accuracy:		81.04 %
+New LR:0.00115292146802
+Epoch 32 of 90 took 6.938m
+  training loss:		1.132608
+  validation loss:		1.880928
+  validation accuracy:		55.38 %
+ top 5 validation accuracy:		81.02 %
+New LR:0.000922337174416
+Epoch 33 of 90 took 6.951m
+  training loss:		1.121610
+  validation loss:		1.884782
+  validation accuracy:		55.34 %
+ top 5 validation accuracy:		80.94 %
+New LR:0.000737869739532
+Epoch 34 of 90 took 6.952m
+  training loss:		1.112413
+  validation loss:		1.887538
+  validation accuracy:		55.48 %
+ top 5 validation accuracy:		80.90 %
+New LR:0.000590295810252
+Epoch 35 of 90 took 6.936m
+  training loss:		1.107548
+  validation loss:		1.890526
+  validation accuracy:		55.34 %
+ top 5 validation accuracy:		81.06 %
+New LR:0.000472236657515
