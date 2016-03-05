@@ -140,6 +140,17 @@ def residual_block(l, increase_dim=False, projection=False):
     return block
 
 
+# create a resfuse learning block with 2 stacked residual block layer
+def resfuse_block(l, increase_dim=False, projection=False):
+    input_num_filters = l.output_shape[1]
+    if increase_dim:
+        first_stride = (2, 2)
+        out_num_filters = input_num_filters * 2
+    else:
+        first_stride = (1, 1)
+        out_num_filters = input_num_filters
+
+
 def build_cnn(input_var=None, n=3):
     # Building the network
     l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
@@ -362,7 +373,8 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
         if data_name == 'cifar-10':
             npz_file_name = 'cifar10_deep_residual_model.npz'
         else:
-            npz_file_name = 'tiny_imagenet_a_epochs_' + str(num_epochs) + '_n_' + str(n) + "_model.npz"
+            npz_file_name = 'tiny_imagen_a_epochs_' + str(num_epochs) + '_n_' + str(n) + "_" \
+                            + time_string() + "_model.npz"
 
         np.savez(npz_file_name, *lasagne.layers.get_all_param_values(network))
     else:
