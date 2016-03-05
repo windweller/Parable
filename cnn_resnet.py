@@ -195,7 +195,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False, augment=False
 
 # ############################## Main program ################################
 
-def main(n=3, num_epochs=30, model=None, **kwargs):
+def main(n=5, num_epochs=30, model=None, **kwargs):
     """
 
     Args:
@@ -366,10 +366,13 @@ if __name__ == '__main__':
         print("MODEL: saved model file to load (for validation) (default: None)")
     else:
         kwargs = {}
+        epochs = 15
         if len(sys.argv) > 1:
             kwargs['n'] = int(sys.argv[1])
         if len(sys.argv) > 2:
-            kwargs['model'] = sys.argv[2]
+            epochs = sys.argv[2]
+        if len(sys.argv) > 3:
+            kwargs['model'] = sys.argv[3]
 
         kwargs['pwd'] = os.path.dirname(os.path.realpath(__file__))
 
@@ -378,4 +381,4 @@ if __name__ == '__main__':
 
         kwargs['subsample'] = 0.1
 
-        main(num_epochs=3, **kwargs)
+        main(num_epochs=epochs, **kwargs)
