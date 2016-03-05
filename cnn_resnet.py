@@ -80,8 +80,8 @@ def load_data():
 
 # ##################### Build the neural network model #######################
 
-from lasagne.layers import Conv2DLayer as ConvLayer
-# from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
+# from lasagne.layers import Conv2DLayer as ConvLayer
+from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
 from lasagne.layers import ElemwiseSumLayer
 from lasagne.layers import InputLayer
 from lasagne.layers import DenseLayer
@@ -286,7 +286,7 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
         # We iterate over epochs:
         for epoch in range(num_epochs):
             # shuffle training data
-            train_indices = np.arange(X_train.shape[0]-1)
+            train_indices = np.arange(X_train.shape[0])
             np.random.shuffle(train_indices)
             X_train = X_train[train_indices, :, :, :]
             Y_train = Y_train[train_indices]
