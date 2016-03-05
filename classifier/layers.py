@@ -45,7 +45,7 @@ def affine_layer(x, w, b):
     return out
 
 
-def batch_norm_layer(x, gamma, beta, bn_param):
+def batch_norm_layer(x, gamma, beta, mean, var, bn_param):
     """
      Forward pass for batch normalization.
 
@@ -70,8 +70,8 @@ def batch_norm_layer(x, gamma, beta, bn_param):
 
      Input:
      - x: Data of shape (N, D)
-     - gamma: Scale parameter of shape (D,)
-     - beta: Shift paremeter of shape (D,)
+     - gamma: Scale parameter of shape (D,), must be a Theano shared variable
+     - beta: Shift paremeter of shape (D,), must be a Theano shared variable
      - bn_param: Dictionary with the following keys:
        - mode: 'train' or 'test'; required
        - eps: Constant for numeric stability
@@ -90,10 +90,12 @@ def batch_norm_layer(x, gamma, beta, bn_param):
     batch_mean = T.mean(x, axis=0)
     batch_var = T.var(x, axis=0)
 
-    running_mean = bn_param.get('running_mean', T.zeros_like(batch_mean))
-    running_var = bn_param.get('running_var', T.zeros_like(batch_var))
+    # so symbolic computation can carry on
+    running_mean = theano.clone(mean, share_inputs=False)
+    running_var = theano.clone(var, share_inputs=False)
 
     out = None
+    mean_var_update = {}
 
     if mode == 'train':
         # Compute output
@@ -111,26 +113,31 @@ def batch_norm_layer(x, gamma, beta, bn_param):
         running_var += (1 - momentum) * batch_var
     elif mode == 'test':
         # Using running mean and variance to normalize
-        std = np.sqrt(running_var + eps)
-        xn = (x - running_mean) / std
+        std = np.sqrt(var + eps)
+        xn = (x - mean) / std
         out = gamma * xn + beta
     else:
         raise ValueError('Invalid forward batchnorm mode "%s"' % mode)
 
-    # Store the updated running means (theano expressions) back into bn_param
-    bn_param['running_mean'] = running_mean
-    bn_param['running_var'] = running_var
+    # store update in the update rule
+    # it gets updated on the outside
+    mean_var_update[mean] = running_mean
+    mean_var_update[var] = running_var
 
-    return out
+    if mode == 'train':
+        return out, mean_var_update
+    if mode == 'test':
+        return out
 
 
-def spatial_batch_norm_layer(x, gamma, beta, bn_param):
+def spatial_batch_norm_layer(x, x_shape, gamma, beta, mean, var, bn_param):
     """
     Same implementation as in Torch
     Careful with Theano's dimshuffle
 
     Inputs:
     - x: Input data of shape (N, C, H, W)
+    - x_shape: a tuple of value (N, C, H, W)
     - gamma: Scale parameter, of shape (C,)
     - beta: Shift parameter, of shape (C,)
     - bn_param: Dictionary with the following keys:
@@ -152,11 +159,25 @@ def spatial_batch_norm_layer(x, gamma, beta, bn_param):
     - cache: Values needed for the backward pass
 
     """
-    out = None
+    out, mean_var_updates = None, None
+    N, C, H, W = x_shape
+    mode = bn_param['mode']
+
     # n_c = x.transpose(1, 0, 2, 3).reshape((C, N * H * W)).transpose()
     # out = out.T.reshape((C, N, H, W)).transpose(1, 0, 2, 3)
 
-    n_c = x.dimshuffle(1, 0, 2, 3).flatten(outdim=2).T
+    original_x = theano.clone(x, share_inputs=False)
+    n_c = x.dimshuffle(1, 0, 2, 3).flatten(ndim=2).T
+    if mode == 'train':
+        out, mean_var_updates = batch_norm_layer(n_c, gamma, beta, mean, var, bn_param)
+    elif mode == 'test':
+        out = batch_norm_layer(n_c, gamma, beta, mean, var, bn_param)
+    out = out.T.reshape((C, N, H, W)).dimshuffle(1, 0, 2, 3)
+
+    if mode == 'train':
+        return out, mean_var_updates
+    elif mode == 'test':
+        return out
 
 
 def softmax_layer(x, y):
@@ -178,7 +199,7 @@ def softmax_layer(x, y):
     return loss
 
 
-def conv_layer(x, w, b, conv_param):
+def conv_layer(x, w, conv_param):
     """
         A naive implementation of the forward pass for a convolutional layer.
 
@@ -261,6 +282,7 @@ class ConvNet(object):
     """
 
     def __init__(self, input_dim=(1, 32, 32),
+                 batch_size=-100,
                  weight_scale=1e-3, reg=0.001,
                  dtype=theano.config.floatX):
         """
@@ -273,6 +295,9 @@ class ConvNet(object):
             H: word_vector dim
             W: total word in a sentence (should be always the same)
             (This is VERY CRUCIAL, not to get it wrong)
+
+        - batch_size: N value, which is passed in by Solver
+                    Initialized as a negative value
 
         - hidden_dim: Number of units to use in the fully-connected hidden layer
             We only have one in the end
@@ -287,8 +312,10 @@ class ConvNet(object):
         - dtype: theano datatype to use for computation.
         """
         self.params = {}
+        self.updates = []  # [(key, value)] this carries out non-parameter update rules (for batch norm)
         self.reg = reg
         self.dtype = dtype
+        self.batch_size = batch_size  # this is N value
         self.input_dim = input_dim
         self.affine_H = input_dim[1]  # always record the "latest" affine shape
         self.affine_W = input_dim[2]  # same here, always updated to the latest
@@ -314,6 +341,7 @@ class ConvNet(object):
 
         We must assume a symbolic x and y, and they are not passing in
         Inputs:
+
         - X: symbolic expression T.matrix('x')
         - y: symbolic expression T.ivector('y')
 
@@ -323,32 +351,53 @@ class ConvNet(object):
 
         mode = 'test' if y is None else 'train'
 
+        # we need to clean out self.updates, if loss() is called again
+        if len(self.updates) != 0:
+            self.updates = []
+
         # if test, we override bn_param to 'test'
+        for param_dict in self.layer_param:
+            if 'bn_param' in param_dict:
+                param_dict['bn_param']['mode'] = mode
 
         out = X
 
         for i, label in enumerate(self.layer_label):
             if label is conv_relu:
                 out = conv_layer(out, self.params['W' + str(i)],
-                                 self.params['b' + str(i)],
                                  self.layer_param[i]['conv_param'])
                 out = leaky_relu(out, self.layer_param[i]['relu_a'])
 
             elif label is conv_batch:
                 out = conv_layer(out, self.params['W' + str(i)],
-                                 self.params['b' + str(i)],
                                  self.layer_param[i]['conv_param'])
-                out = batch_norm_layer(out, self.params['gamma' + str(i)],
-                                       self.params['beta' + str(i)],
-                                       self.layer_param[i]['bn_param'])
+                t_return = spatial_batch_norm_layer(out, self.layer_param[i]['x_shape'],
+                                                    self.params['gamma' + str(i)],
+                                                    self.params['beta' + str(i)],
+                                                    self.layer_param[i]['mean'],
+                                                    self.layer_param[i]['var'],
+                                                    self.layer_param[i]['bn_param'])
+                if mode == 'train':
+                    out = t_return[0]
+                    self.updates.extend(t_return[1].items())
+                elif mode == 'test':
+                    out = t_return
 
             elif label is conv_batch_relu:
                 out = conv_layer(out, self.params['W' + str(i)],
-                                 self.params['b' + str(i)],
                                  self.layer_param[i]['conv_param'])
-                out = batch_norm_layer(out, self.params['gamma' + str(i)],
-                                       self.params['beta' + str(i)],
-                                       self.layer_param[i]['bn_param'])
+                t_return = spatial_batch_norm_layer(out, self.layer_param[i]['x_shape'],
+                                               self.params['gamma' + str(i)],
+                                               self.params['beta' + str(i)],
+                                               self.layer_param[i]['mean'],
+                                               self.layer_param[i]['var'],
+                                               self.layer_param[i]['bn_param'])
+                if mode == 'train':
+                    out = t_return[0]
+                    self.updates.extend(t_return[1].items())
+                elif mode == 'test':
+                    out = t_return
+
                 out = leaky_relu(out, self.layer_param[i]['relu_a'])
 
             elif label is avg_pool:
@@ -370,7 +419,7 @@ class ConvNet(object):
                 sys.exit(0)
 
         if y is None:
-            return out  # those are the final scores
+            return out  # those are the final scores (we don't need to pass into softmax)
 
         # an if in case we use other final algorithm like SVM
         if self.layer_label[-1] is affine_softmax:
@@ -442,11 +491,13 @@ class ConvNet(object):
             name='W' + str(self.i),
             borrow=True
         )
-        self.params['b' + str(self.i)] = theano.shared(
-            value=np.zeros(number_filter, dtype=self.dtype),
-            name='b' + str(self.i),
-            borrow=True
-        )
+        # NOTICE: we are not using bias in Theano's conv2d implementation
+
+        # self.params['b' + str(self.i)] = theano.shared(
+        #     value=np.zeros(number_filter, dtype=self.dtype),
+        #     name='b' + str(self.i),
+        #     borrow=True
+        # )
         self.prev_depth = number_filter
         self.affine_H = 1 + (self.affine_H + 2 * pad - filter_size) / stride
         self.affine_W = 1 + (self.affine_W + 2 * pad - filter_size) / stride
@@ -468,12 +519,8 @@ class ConvNet(object):
 
     def add_conv_relu_layer(self, number_filter, filter_size, pad, stride, relu_a, inde_layer=True):
         """
-
         Args:
             inde_layer: When flagged True, self.i will add 1
-
-        Returns:
-
         """
         self.params['W' + str(self.i)] = theano.shared(
             value=self.weight_scale * np.asarray(np.random.randn(
@@ -532,10 +579,6 @@ class ConvNet(object):
         BatchNorm is never an "independent" layer
         (meaning it doesn't have W or b)
         so we don't add label to anything
-
-        Args:
-            number_filter:
-
         """
 
         gamma = np.ones(number_filter, dtype=self.dtype)
@@ -547,14 +590,35 @@ class ConvNet(object):
         self.params['beta' + str(self.i)] = self.wrap_shared_var(beta,
                                                                  'beta' + str(self.i),
                                                                  borrow=True)
+
+        mean = self.wrap_shared_var(beta, 'mean' + str(self.i),
+                                    borrow=True)
+
+        var = self.wrap_shared_var(beta, 'var' + str(self.i),
+                                   borrow=True)
+
         bn_param = {'mode': 'train'}
+
+        if self.batch_size <= 0:
+            raise ValueError('Batch size cannot be negative: %s' % self.batch_size)
+
+        # add x shape info
+        # TODO: check if this is correct lol
+        x_shape = (self.batch_size,
+                   self.prev_depth, self.affine_H, self.affine_W)
 
         if len(self.layer_param) == self.i:
             # meaning: there is nothing in layer_param yet
             # need to check if this part is working :(
-            self.layer_param.append({'bn_param': bn_param})
+            self.layer_param.append({'bn_param': bn_param,
+                                     'x_shape': x_shape,
+                                     'mean': mean,
+                                     'var': var})
         else:
             self.layer_param[self.i]['bn_param'] = bn_param
+            self.layer_param[self.i]['x_shape'] = x_shape
+            self.layer_param[self.i]['mean'] = mean
+            self.layer_param[self.i]['var'] = var
 
     def add_conv_batch_relu_layer(self, number_filter, filter_size, pad, stride, relu_a):
         self.add_conv_layer(number_filter, filter_size, pad, stride, inde_layer=False)

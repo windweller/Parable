@@ -3,6 +3,8 @@ import numpy as np
 import theano.tensor as T
 import theano
 
+from classifier.util import wrap_shared_var
+
 """
 Solver will take in
 data and has util functions
@@ -56,6 +58,9 @@ class Solver(object):
 
     - model.params must be a dictionary mapping string parameter names to numpy
       arrays containing parameter values.
+
+    - model.updates must contain not-parameter update rules (such as Batch Normalization
+      we will update running_mean and running_var)
 
     - model.loss(X, y) must be a function that computes training-time loss and
       gradients, and test-time classification scores, with the following inputs
@@ -117,8 +122,8 @@ class Solver(object):
         self.y_train = data['y_train']
         self.X_val = data['X_val']
         self.y_val = data['y_val']
-        self.x = T.matrix('x')  # data, presented as rasterized images
-        self.y = T.ivector('y')  # labels, presented as 1D vector of [int] labels
+        self.X = symbolic_X  # data, presented as rasterized images
+        self.y = symbolic_y  # labels, presented as 1D vector of [int] labels
 
         # Unpack keyword arguments
         self.update_rule = kwargs.pop('update_rule', 'sgd')
@@ -143,12 +148,14 @@ class Solver(object):
 
         self._reset()
 
-    def _step(self):
+    def _step(self, t, loss):
         """
         Make a single gradient update. This is called by train() and should not
         be called manually.
         This requires massive change.
         actual parameter updates are actually incurred inside train function
+
+        we also must pass the loss function from the outside
 
         Returns
         - updates: [(original var, updated var)], to obey Theano's update rules
@@ -163,9 +170,6 @@ class Solver(object):
         X_batch = self.X_train[batch_mask]
         y_batch = self.y_train[batch_mask]
 
-        # Compute loss and gradient
-        loss = self.model.loss(self.x, self.y)  # (X_batch, y_batch)
-
         # Perform a parameter update (by param update)
         for p, w in self.model.params.iteritems():
             # p: name of param, w: actual param (shared variable) (x is not there)
@@ -175,14 +179,24 @@ class Solver(object):
             updates.append((self.model.params[p], next_w))  # we store those updates
             self.optim_configs[p] = next_config
 
+        # ADD OTHER STUFF TO UPDATES list (such as BATCH NORM's updates)
+        updates.extend(self.model.updates)
+
         # We create a Theano function
         # this gets the loss and run parameter update!
+
+        X_batch_shared = wrap_shared_var(X_batch, 'X_batch'+str(t), borrow=True)
+        y_batch_shared = wrap_shared_var(y_batch, 'y_batch'+str(t), borrow=True)
+
+        # print updates
+        # print
+
         loss_value = theano.function([], loss, updates=updates,
                                      givens={
-                                         self.x: X_batch,
-                                         self.y: y_batch
+                                         self.X: X_batch_shared,
+                                         self.y: y_batch_shared
                                      })
-        self.loss_history.append(loss_value)
+        self.loss_history.append(loss_value())
 
     def _reset(self):
         """
@@ -203,7 +217,7 @@ class Solver(object):
             d = {k: v for k, v in self.optim_config.iteritems()}
             self.optim_configs[p] = d
 
-    def check_accuracy(self, X, y, num_samples=None, batch_size=100):
+    def check_accuracy(self, scores_sym, X, y, num_samples=None, batch_size=100):
         """
         Check accuracy of the model on the provided data.
 
@@ -219,6 +233,11 @@ class Solver(object):
         - acc: Scalar giving the fraction of instances that were correctly
           classified by the model.
         """
+
+        # TODO: This needs rework...to fit Theano
+        # if self.y is not passed in,
+        # loss function will set bn_param to 'test'
+
         # Maybe subsample the data
         N = X.shape[0]
         if num_samples is not None and N > num_samples:
@@ -233,17 +252,25 @@ class Solver(object):
             num_batches += 1
         y_pred = []
 
+        X_shared = wrap_shared_var(X, 'X_check_accuracy', borrow=True)
+
+        # Compute test loss
+        # when we just pass in X, we also get the probability back
+
+        # predictions_scores = self.model.loss(self.X)  # (X_batch, y_batch)
+
         # Theano function to get accuraries
-        start = T.scalar('start')
-        end = T.scalar('end')
-        compute_scores = theano.function([start, end], self.model.loss,
-                                         givens={self.x: X[start:end]})
+        start_sym = T.lscalar('start')
+        end_sym = T.lscalar('end')
+        compute_scores = theano.function([start_sym, end_sym], scores_sym,
+                                         givens={self.X: X_shared[start_sym:end_sym]})
 
         for i in xrange(num_batches):
             start = i * batch_size
             end = (i + 1) * batch_size
             scores = compute_scores(start, end)  # self.model.loss(X[start:end])
             y_pred.append(np.argmax(scores, axis=1))
+
         y_pred = np.hstack(y_pred)
         acc = np.mean(y_pred == y)
 
@@ -254,12 +281,15 @@ class Solver(object):
         Run optimization to train the model.
         """
 
+        # Compute loss and gradient
+        training_loss = self.model.loss(self.X, self.y)  # (X_batch, y_batch)
+
         num_train = self.X_train.shape[0]
         iterations_per_epoch = max(num_train / self.batch_size, 1)
         num_iterations = self.num_epochs * iterations_per_epoch
 
         for t in xrange(num_iterations):
-            self._step()
+            self._step(t, training_loss)
 
             # Maybe print training loss
             if self.verbose and t % self.print_every == 0:
@@ -278,10 +308,13 @@ class Solver(object):
             # iteration, and at the end of each epoch.
             first_it = (t == 0)
             last_it = (t == num_iterations + 1)
+
+            scores_for_accuracy = self.model.loss(self.X)
+
             if first_it or last_it or epoch_end:
-                train_acc = self.check_accuracy(self.X_train, self.y_train,
+                train_acc = self.check_accuracy(scores_for_accuracy, self.X_train, self.y_train,
                                                 num_samples=1000)
-                val_acc = self.check_accuracy(self.X_val, self.y_val)
+                val_acc = self.check_accuracy(scores_for_accuracy, self.X_val, self.y_val)
                 self.train_acc_history.append(train_acc)
                 self.val_acc_history.append(val_acc)
 
