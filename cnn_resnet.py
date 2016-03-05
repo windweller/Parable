@@ -282,10 +282,11 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
     if model is None:
         # launch the training loop
         print("Starting training...")
+        training_start_time = time.time()
         # We iterate over epochs:
         for epoch in range(num_epochs):
             # shuffle training data
-            train_indices = np.arange(X_train.shape[0])
+            train_indices = np.arange(X_train.shape[0]-1)
             np.random.shuffle(train_indices)
             X_train = X_train[train_indices, :, :, :]
             Y_train = Y_train[train_indices]
@@ -311,8 +312,8 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
                 val_batches += 1
 
             # Then we print the results for this epoch:
-            print("Epoch {} of {} took {:.3f}s".format(
-                epoch + 1, num_epochs, time.time() - start_time))
+            print("Epoch {} of {} took {:.3f}m".format(
+                epoch + 1, num_epochs, (time.time() - start_time)/60.0))
             print("  training loss:\t\t{:.6f}".format(train_err / train_batches))
             print("  validation loss:\t\t{:.6f}".format(val_err / val_batches))
             print("  validation accuracy:\t\t{:.2f} %".format(
@@ -324,6 +325,9 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
                 new_lr = sh_lr.get_value() * 0.1
                 print("New LR:" + str(new_lr))
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
+
+        # print out total training time
+        print("Total training time: {:.3f}m".format((time.time() - training_start_time)/60.0))
 
         # dump the network weights to a file :
         npz_file_name = ''
@@ -366,7 +370,7 @@ if __name__ == '__main__':
         print("MODEL: saved model file to load (for validation) (default: None)")
     else:
         kwargs = {}
-        epochs = 15
+        epochs = 86
         if len(sys.argv) > 1:
             kwargs['n'] = int(sys.argv[1])
         if len(sys.argv) > 2:
@@ -379,6 +383,6 @@ if __name__ == '__main__':
         kwargs['path'] = kwargs['pwd'] +'/data/tiny-imagenet-100-A'
         kwargs['data'] = 'tiny-image-net'
 
-        kwargs['subsample'] = 0.1
+        kwargs['subsample'] = 1
 
         main(num_epochs=epochs, **kwargs)
