@@ -7,14 +7,14 @@ while the 56-layer network (n=9) achieves error of 6.75%, which is roughly equiv
 """
 
 from __future__ import print_function
-
 import sys
 import os
 import time
 import string
 import random
 import pickle
-
+from data.image_util import *
+from logs.logs_util import *
 import numpy as np
 import theano
 import theano.tensor as T
@@ -22,6 +22,7 @@ import lasagne
 
 # for the larger networks (n>=9), we need to adjust pythons recursion limit
 sys.setrecursionlimit(10000)
+
 
 # ##################### Load data from CIFAR-10 dataset #######################
 # this code assumes the cifar dataset from 'https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
@@ -34,51 +35,53 @@ def unpickle(file):
     fo.close()
     return dict
 
+
 def load_data():
     xs = []
     ys = []
     for j in range(5):
-      d = unpickle('cifar-10-batches-py/data_batch_'+`j+1`)
-      x = d['data']
-      y = d['labels']
-      xs.append(x)
-      ys.append(y)
+        d = unpickle('cifar-10-batches-py/data_batch_' + `j + 1`)
+        x = d['data']
+        y = d['labels']
+        xs.append(x)
+        ys.append(y)
 
     d = unpickle('cifar-10-batches-py/test_batch')
     xs.append(d['data'])
     ys.append(d['labels'])
 
-    x = np.concatenate(xs)/np.float32(255)
+    x = np.concatenate(xs) / np.float32(255)
     y = np.concatenate(ys)
     x = np.dstack((x[:, :1024], x[:, 1024:2048], x[:, 2048:]))
-    x = x.reshape((x.shape[0], 32, 32, 3)).transpose(0,3,1,2)
+    x = x.reshape((x.shape[0], 32, 32, 3)).transpose(0, 3, 1, 2)
 
     # subtract per-pixel mean
-    pixel_mean = np.mean(x[0:50000],axis=0)
-    #pickle.dump(pixel_mean, open("cifar10-pixel_mean.pkl","wb"))
+    pixel_mean = np.mean(x[0:50000], axis=0)
+    # pickle.dump(pixel_mean, open("cifar10-pixel_mean.pkl","wb"))
     x -= pixel_mean
 
     # create mirrored images
-    X_train = x[0:50000,:,:,:]
+    X_train = x[0:50000, :, :, :]
     Y_train = y[0:50000]
-    X_train_flip = X_train[:,:,:,::-1]
+    X_train_flip = X_train[:, :, :, ::-1]
     Y_train_flip = Y_train
-    X_train = np.concatenate((X_train,X_train_flip),axis=0)
-    Y_train = np.concatenate((Y_train,Y_train_flip),axis=0)
+    X_train = np.concatenate((X_train, X_train_flip), axis=0)
+    Y_train = np.concatenate((Y_train, Y_train_flip), axis=0)
 
-    X_test = x[50000:,:,:,:]
+    X_test = x[50000:, :, :, :]
     Y_test = y[50000:]
 
     return dict(
         X_train=lasagne.utils.floatX(X_train),
         Y_train=Y_train.astype('int32'),
-        X_test = lasagne.utils.floatX(X_test),
-        Y_test = Y_test.astype('int32'),)
+        X_test=lasagne.utils.floatX(X_test),
+        Y_test=Y_test.astype('int32'), )
+
 
 # ##################### Build the neural network model #######################
 
-#from lasagne.layers import Conv2DLayer as ConvLayer
-from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
+from lasagne.layers import Conv2DLayer as ConvLayer
+# from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
 from lasagne.layers import ElemwiseSumLayer
 from lasagne.layers import InputLayer
 from lasagne.layers import DenseLayer
@@ -89,67 +92,77 @@ from lasagne.layers import NonlinearityLayer
 from lasagne.nonlinearities import softmax, rectify
 from lasagne.layers import batch_norm
 
-def build_cnn(input_var=None, n=5):
-    
-    # create a residual learning building block with two stacked 3x3 convlayers as in paper
-    def residual_block(l, increase_dim=False, projection=False):
-        input_num_filters = l.output_shape[1]
-        if increase_dim:
-            first_stride = (2,2)
-            out_num_filters = input_num_filters*2
-        else:
-            first_stride = (1,1)
-            out_num_filters = input_num_filters
 
-        stack_1 = batch_norm(ConvLayer(l, num_filters=out_num_filters, filter_size=(3,3), stride=first_stride, nonlinearity=rectify, pad='same', W=lasagne.init.HeNormal(gain='relu')))
-        stack_2 = batch_norm(ConvLayer(stack_1, num_filters=out_num_filters, filter_size=(3,3), stride=(1,1), nonlinearity=None, pad='same', W=lasagne.init.HeNormal(gain='relu')))
-        
-        # add shortcut connections
-        if increase_dim:
-            if projection:
-                # projection shortcut, as option B in paper
-                projection = batch_norm(ConvLayer(l, num_filters=out_num_filters, filter_size=(1,1), stride=(2,2), nonlinearity=None, pad='same', b=None))
-                block = NonlinearityLayer(ElemwiseSumLayer([stack_2, projection]),nonlinearity=rectify)
-            else:
-                # identity shortcut, as option A in paper
-                identity = ExpressionLayer(l, lambda X: X[:, :, ::2, ::2], lambda s: (s[0], s[1], s[2]//2, s[3]//2))
-                padding = PadLayer(identity, [out_num_filters//4,0,0], batch_ndim=1)
-                block = NonlinearityLayer(ElemwiseSumLayer([stack_2, padding]),nonlinearity=rectify)
+# create a residual learning building block with two stacked 3x3 convlayers as in paper
+def residual_block(l, increase_dim=False, projection=False):
+    input_num_filters = l.output_shape[1]
+    if increase_dim:
+        first_stride = (2, 2)
+        out_num_filters = input_num_filters * 2
+    else:
+        first_stride = (1, 1)
+        out_num_filters = input_num_filters
+
+    stack_1 = batch_norm(
+        ConvLayer(l, num_filters=out_num_filters, filter_size=(3, 3), stride=first_stride, nonlinearity=rectify,
+                  pad='same', W=lasagne.init.HeNormal(gain='relu')))
+    stack_2 = batch_norm(
+        ConvLayer(stack_1, num_filters=out_num_filters, filter_size=(3, 3), stride=(1, 1), nonlinearity=None,
+                  pad='same', W=lasagne.init.HeNormal(gain='relu')))
+
+    # add shortcut connections
+    if increase_dim:
+        if projection:
+            # projection shortcut, as option B in paper
+            projection = batch_norm(
+                ConvLayer(l, num_filters=out_num_filters, filter_size=(1, 1), stride=(2, 2), nonlinearity=None,
+                          pad='same', b=None))
+            block = NonlinearityLayer(ElemwiseSumLayer([stack_2, projection]), nonlinearity=rectify)
         else:
-            block = NonlinearityLayer(ElemwiseSumLayer([stack_2, l]),nonlinearity=rectify)
-        
-        return block
+            # identity shortcut, as option A in paper
+            identity = ExpressionLayer(l, lambda X: X[:, :, ::2, ::2], lambda s: (s[0], s[1], s[2] // 2, s[3] // 2))
+            padding = PadLayer(identity, [out_num_filters // 4, 0, 0], batch_ndim=1)
+            block = NonlinearityLayer(ElemwiseSumLayer([stack_2, padding]), nonlinearity=rectify)
+    else:
+        block = NonlinearityLayer(ElemwiseSumLayer([stack_2, l]), nonlinearity=rectify)
+
+    return block
+
+
+def build_cnn(input_var=None, n=5):
 
     # Building the network
-    l_in = InputLayer(shape=(None, 3, 32, 32), input_var=input_var)
+    l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
 
     # first layer, output is 16 x 32 x 32
-    l = batch_norm(ConvLayer(l_in, num_filters=16, filter_size=(3,3), stride=(1,1), nonlinearity=rectify, pad='same', W=lasagne.init.HeNormal(gain='relu')))
-    
+    l = batch_norm(ConvLayer(l_in, num_filters=16, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+                             W=lasagne.init.HeNormal(gain='relu')))
+
     # first stack of residual blocks, output is 16 x 32 x 32
     for _ in range(n):
         l = residual_block(l)
 
     # second stack of residual blocks, output is 32 x 16 x 16
     l = residual_block(l, increase_dim=True)
-    for _ in range(1,n):
+    for _ in range(1, n):
         l = residual_block(l)
 
     # third stack of residual blocks, output is 64 x 8 x 8
     l = residual_block(l, increase_dim=True)
-    for _ in range(1,n):
+    for _ in range(1, n):
         l = residual_block(l)
-    
+
     # average pooling
     l = GlobalPoolLayer(l)
 
     # fully connected layer
     network = DenseLayer(
-            l, num_units=10,
-            W=lasagne.init.HeNormal(),
-            nonlinearity=softmax)
+        l, num_units=100,
+        W=lasagne.init.HeNormal(),
+        nonlinearity=softmax)
 
     return network
+
 
 # ############################# Batch iterator ###############################
 
@@ -167,28 +180,57 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False, augment=False
             # as in paper : 
             # pad feature arrays with 4 pixels on each side
             # and do random cropping of 32x32
-            padded = np.pad(inputs[excerpt],((0,0),(0,0),(4,4),(4,4)),mode='constant')
+            padded = np.pad(inputs[excerpt], ((0, 0), (0, 0), (4, 4), (4, 4)), mode='constant')
             random_cropped = np.zeros(inputs[excerpt].shape, dtype=np.float32)
-            crops = np.random.random_integers(0,high=8,size=(batchsize,2))
+            crops = np.random.random_integers(0, high=8, size=(batchsize, 2))
             for r in range(batchsize):
-                random_cropped[r,:,:,:] = padded[r,:,crops[r,0]:(crops[r,0]+32),crops[r,1]:(crops[r,1]+32)]
+                random_cropped[r, :, :, :] = padded[r, :, crops[r, 0]:(crops[r, 0] + 32),
+                                             crops[r, 1]:(crops[r, 1] + 32)]
             inp_exc = random_cropped
         else:
             inp_exc = inputs[excerpt]
 
         yield inp_exc, targets[excerpt]
 
+
 # ############################## Main program ################################
 
-def main(n=5, num_epochs=82, model=None):
+def main(n=5, num_epochs=30, model=None, **kwargs):
+    """
+
+    Args:
+        **kwargs:
+        - path: direct path to CIFAR-10 or TinyImageNet
+        - data: "cifar-10" or "tiny-image-net"
+    Returns:
+
+    """
+
+    # Unpack keyword arguments
+    path = kwargs.pop('path', './cifar-10-batches-py')
+    data_name = kwargs.pop('data', 'cifar-10')
+
     # Check if cifar data exists
-    if not os.path.exists("./cifar-10-batches-py"):
-        print("CIFAR-10 dataset can not be found. Please download the dataset from 'https://www.cs.toronto.edu/~kriz/cifar.html'.")
+    if not os.path.exists(path):
+        print(
+            "CIFAR-10 dataset can not be found. Please download the dataset from 'https://www.cs.toronto.edu/~kriz/cifar.html'.")
+        print("Or download Tiny-imagenet-A :)")
         return
 
     # Load the dataset
     print("Loading data...")
-    data = load_data()
+
+    data = None
+    if data_name == 'cifar-10':
+        data = load_data()
+    elif data_name == 'tiny-image-net':
+        sub_sample = kwargs.pop('subsample', 0.1)
+        data = load_tiny_imagenet(path, sub_sample=sub_sample, subtract_mean=True,
+                                  dtype=theano.config.floatX)
+        data['X_test'] = data['X_val']
+        data['Y_test'] = data['y_val']
+        data['Y_train'] = data['y_train']
+
     X_train = data['X_train']
     Y_train = data['Y_train']
     X_test = data['X_test']
@@ -202,7 +244,7 @@ def main(n=5, num_epochs=82, model=None):
     print("Building model and compiling functions...")
     network = build_cnn(input_var, n)
     print("number of parameters in model: %d" % lasagne.layers.count_params(network, trainable=True))
-    
+
     if model is None:
         # Create a loss expression for training, i.e., a scalar objective we want
         # to minimize (for our multi-class problem, it is the cross-entropy loss):
@@ -220,8 +262,8 @@ def main(n=5, num_epochs=82, model=None):
         lr = 0.1
         sh_lr = theano.shared(lasagne.utils.floatX(lr))
         updates = lasagne.updates.momentum(
-                loss, params, learning_rate=sh_lr, momentum=0.9)
-        
+            loss, params, learning_rate=sh_lr, momentum=0.9)
+
         # Compile a function performing a training step on a mini-batch (by giving
         # the updates dictionary) and returning the corresponding training loss:
         train_fn = theano.function([input_var, target_var], loss, updates=updates)
@@ -245,7 +287,7 @@ def main(n=5, num_epochs=82, model=None):
             # shuffle training data
             train_indices = np.arange(100000)
             np.random.shuffle(train_indices)
-            X_train = X_train[train_indices,:,:,:]
+            X_train = X_train[train_indices, :, :, :]
             Y_train = Y_train[train_indices]
 
             # In each epoch, we do a full pass over the training data:
@@ -278,9 +320,9 @@ def main(n=5, num_epochs=82, model=None):
 
             # adjust learning rate as in paper
             # 32k and 48k iterations should be roughly equivalent to 41 and 61 epochs
-            if (epoch+1) == 41 or (epoch+1) == 61:
+            if (epoch + 1) == 41 or (epoch + 1) == 61:
                 new_lr = sh_lr.get_value() * 0.1
-                print("New LR:"+str(new_lr))
+                print("New LR:" + str(new_lr))
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
 
         # dump the network weights to a file :
@@ -288,7 +330,7 @@ def main(n=5, num_epochs=82, model=None):
     else:
         # load network weights from model file
         with np.load(model) as f:
-             param_values = [f['arr_%d' % i] for i in range(len(f.files))]
+            param_values = [f['arr_%d' % i] for i in range(len(f.files))]
         lasagne.layers.set_all_param_values(network, param_values)
 
     # Calculate validation error of model:
@@ -310,7 +352,8 @@ def main(n=5, num_epochs=82, model=None):
 if __name__ == '__main__':
     if ('--help' in sys.argv) or ('-h' in sys.argv):
         print("Trains a Deep Residual Learning network on cifar-10 using Lasagne.")
-        print("Network architecture and training parameters are as in section 4.2 in 'Deep Residual Learning for Image Recognition'.")
+        print(
+            "Network architecture and training parameters are as in section 4.2 in 'Deep Residual Learning for Image Recognition'.")
         print("Usage: %s [N [MODEL]]" % sys.argv[0])
         print()
         print("N: Number of stacked residual building blocks per feature map (default: 5)")
@@ -321,4 +364,10 @@ if __name__ == '__main__':
             kwargs['n'] = int(sys.argv[1])
         if len(sys.argv) > 2:
             kwargs['model'] = sys.argv[2]
-        main(**kwargs)
+
+        kwargs['pwd'] = os.path.dirname(os.path.realpath(__file__))
+
+        kwargs['path'] = kwargs['pwd'] +'/data/tiny-imagenet-100-A'
+        kwargs['data'] = 'tiny-image-net'
+
+        main(num_epochs=3, **kwargs)
