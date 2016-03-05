@@ -106,6 +106,12 @@ from lasagne.layers import batch_norm
 
 # create a residual learning building block with two stacked 3x3 convlayers as in paper
 def residual_block(l, increase_dim=False, projection=False):
+    """
+    Args:
+        increase_dim: controls whether we double out filter number
+    Returns:
+
+    """
     input_num_filters = l.output_shape[1]
     if increase_dim:
         first_stride = (2, 2)
@@ -356,8 +362,8 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
 
             # decay learning rate when a plateau is hit
             # when overall validation acc becomes negative or increases smaller than 0.01
-            # we decay learning rate by 0.5
-            if (val_acc / val_batches) - best_val_acc < 0.01:
+            # we decay learning rate by 0.8
+            if (val_acc / val_batches) - best_val_acc < 0.005:
                 new_lr = sh_lr.get_value() * 0.8
                 print("New LR:" + str(new_lr))
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
