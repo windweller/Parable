@@ -147,34 +147,55 @@ def residual_block(l, increase_dim=False, projection=False):
 
 
 # create a resfuse learning block with 2 stacked residual block layer
-def resfuse_block(l, increase_dim=False, projection=False):
+def resfuse_block(l, increase_dim=False, projection=False, excessive=False):
+    """
+    Args:
+        increase_dim: only affect the first resnet block
+        excessive: whether we try to connect more, or less
+    """
     input_num_filters = l.output_shape[1]
+    o = None # store res_block's output
     if increase_dim:
-        first_stride = (2, 2)
+        o = residual_block(l, increase_dim=True)
         out_num_filters = input_num_filters * 2
     else:
-        first_stride = (1, 1)
+        o = residual_block(l)
         out_num_filters = input_num_filters
 
+    o = residual_block(o)
 
-def build_cnn(input_var=None, n=3):
+    # add shortcut connections
+    if increase_dim:
+        if projection:
+            raise NotImplementedError("projection on resfuse net isn't implemented yet")
+        else:
+            # identity shortcut
+            # this part might....break?
+            identity = ExpressionLayer(l, lambda X: X[:, :, ::2, ::2], lambda s: (s[0], s[1], s[2] // 2, s[3] // 2))
+            padding = PadLayer(identity, [out_num_filters // 4, 0, 0], batch_ndim=1)
+
+
+def build_cnn(input_var=None, n=5):
     # Building the network
     l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
 
-    # first layer, output is 16 x 32 x 32
+    # first layer, output is 16 x 64 x 64
     l = batch_norm(ConvLayer(l_in, num_filters=16, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
                              W=lasagne.init.HeNormal(gain='relu')))
 
-    # first stack of residual blocks, output is 16 x 32 x 32
+    # we could pool aggressively here, but we don't have to
+    # CIFAR-10 doesn't aggressively pool, and ImageNet 128x128 aggressively pools
+
+    # first stack of residual blocks, output is 16 x 64 x 64
     for _ in range(n):
         l = residual_block(l)
 
-    # second stack of residual blocks, output is 32 x 16 x 16
+    # second stack of residual blocks, output is 32 x 32 x 32
     l = residual_block(l, increase_dim=True)
     for _ in range(1, n):
         l = residual_block(l)
 
-    # third stack of residual blocks, output is 64 x 8 x 8
+    # third stack of residual blocks, output is 64 x 16 x 16
     l = residual_block(l, increase_dim=True)
     for _ in range(1, n):
         l = residual_block(l)
@@ -222,15 +243,12 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False, augment=False
 
 # ############################## Main program ################################
 
-def main(n=5, num_epochs=30, model=None, **kwargs):
+def main(n=6, num_epochs=30, model=None, **kwargs):
     """
-
     Args:
         **kwargs:
         - path: direct path to CIFAR-10 or TinyImageNet
         - data: "cifar-10" or "tiny-image-net"
-    Returns:
-
     """
 
     # Unpack keyword arguments
@@ -355,7 +373,7 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
 
             # adjust learning rate as in paper
             # 32k and 48k iterations should be roughly equivalent to 41 and 61 epochs
-            # if (epoch + 1) == 41 or (epoch + 1) == 61:
+            # if (epoch + 1) == 70 or (epoch + 1) == 120:
             #     new_lr = sh_lr.get_value() * 0.1
             #     print("New LR:" + str(new_lr))
             #     sh_lr.set_value(lasagne.utils.floatX(new_lr))
@@ -364,7 +382,7 @@ def main(n=5, num_epochs=30, model=None, **kwargs):
             # when overall validation acc becomes negative or increases smaller than 0.01
             # we decay learning rate by 0.8
             if (val_acc / val_batches) - best_val_acc < 0.005:
-                new_lr = sh_lr.get_value() * 0.8
+                new_lr = sh_lr.get_value() * 0.95
                 print("New LR:" + str(new_lr))
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
 
