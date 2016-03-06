@@ -168,8 +168,10 @@ def resfuse_super_block(l, excessive=True):
 
 
 # create a resfuse learning block with 2 stacked residual block layer
-def resfuse_block(l):
+def resfuse_block(l, residual=0.01):
     """
+    residual: a hyperparameter of how much to leak in
+
     Every resfuse block is made of 2 resblock
     and top connect to bottom
     We simply won't allow dimension increase in a simple
@@ -182,7 +184,7 @@ def resfuse_block(l):
     stack1 = residual_block(l)
     stack2 = residual_block(stack1)
 
-    block = NonlinearityLayer(ElemwiseSumLayer([stack2, l]), nonlinearity=None)
+    block = NonlinearityLayer(ElemwiseSumLayer([stack2, l], coeffs=residual), nonlinearity=None)
 
     return block
 
@@ -202,7 +204,6 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
 
     # # second stack of residual blocks, output is 32 x 32 x 32
     l = residual_block(l, increase_dim=True)
-    l = residual_block(l)
     l = resfuse_block(l)
     # l = resfuse_super_block(l, excessive=execessive)
     # l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
