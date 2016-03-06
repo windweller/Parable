@@ -2,7 +2,7 @@
 
 """
 Lasagne implementation of CIFAR-10 examples from "Deep Residual Learning for Image Recognition" (http://arxiv.org/abs/1512.03385)
-Check the accompanying files for pretrained models. The 32-layer network (n=5), achieves a validation error of 7.42%, 
+Check the accompanying files for pretrained models. The 32-layer network (n=5), achieves a validation error of 7.42%,
 while the 56-layer network (n=9) achieves error of 6.75%, which is roughly equivalent to the examples in the paper.
 """
 
@@ -93,7 +93,7 @@ def load_data():
 
 # from lasagne.layers import Conv2DLayer as ConvLayer
 from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
-from lasagne.layers import ElemwiseSumLayer, MaxPool2DLayer
+from lasagne.layers import ElemwiseSumLayer
 from lasagne.layers import InputLayer
 from lasagne.layers import DenseLayer
 from lasagne.layers import GlobalPoolLayer
@@ -198,15 +198,15 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
     # first stack of residual blocks, output is 16 x 64 x 64
     l = resfuse_block(l)
     # 2 resfuse blocks
-    l = resfuse_super_block(l, excessive=execessive)
+    # l = resfuse_super_block(l, excessive=execessive)
 
-    # second stack of residual blocks, output is 32 x 32 x 32
-    l = residual_block(l, increase_dim=True)
-    l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
-
-    # third stack of residual blocks, output is 64 x 16 x 16
-    l = residual_block(l, increase_dim=True)
-    l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
+    # # second stack of residual blocks, output is 32 x 32 x 32
+    # l = residual_block(l, increase_dim=True)
+    # l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
+    #
+    # # third stack of residual blocks, output is 64 x 16 x 16
+    # l = residual_block(l, increase_dim=True)
+    # l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
 
     # average pooling
     l = GlobalPoolLayer(l)
@@ -222,34 +222,27 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
 
 def build_cnn(input_var=None, n=5):
     # Building the network
-    # This is a ResNet-34 architecture, same as
-
     l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
 
     # first layer, output is 16 x 64 x 64
-    l = batch_norm(ConvLayer(l_in, num_filters=64, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+    l = batch_norm(ConvLayer(l_in, num_filters=16, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
                              W=lasagne.init.HeNormal(gain='relu')))
 
+    # we could pool aggressively here, but we don't have to
     # CIFAR-10 doesn't aggressively pool, and ImageNet 128x128 aggressively pools
-    l = MaxPool2DLayer(l, 2) # 32 x 32
 
-    # first stack of residual blocks, output is 64 x 32 x 32
-    for _ in range(3):
+    # first stack of residual blocks, output is 16 x 64 x 64
+    for _ in range(n):
         l = residual_block(l)
 
-    # second stack of residual blocks, output is 128 x 16 x 16
+    # second stack of residual blocks, output is 32 x 32 x 32
     l = residual_block(l, increase_dim=True)
-    for _ in range(3):
+    for _ in range(1, n):
         l = residual_block(l)
 
-    # third stack of residual blocks, output is 256 x 16 x 16
+    # third stack of residual blocks, output is 64 x 16 x 16
     l = residual_block(l, increase_dim=True)
-    for _ in range(5):
-        l = residual_block(l)
-
-    # fourth stack of residual blocks, output is 512 x 8 x 8
-    l = residual_block(l, increase_dim=True)
-    for _ in range(2):
+    for _ in range(1, n):
         l = residual_block(l)
 
     # average pooling
@@ -277,7 +270,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False, augment=False
         else:
             excerpt = slice(start_idx, start_idx + batchsize)
         if augment:
-            # as in paper : 
+            # as in paper :
             # pad feature arrays with 4 pixels on each side
             # and do random cropping of 64x64
             padded = np.pad(inputs[excerpt], ((0, 0), (0, 0), (4, 4), (4, 4)), mode='constant')
@@ -307,7 +300,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
     # Unpack keyword arguments
     path = kwargs.pop('path', './cifar-10-batches-py')
     data_name = kwargs.pop('data', 'cifar-10')
-    model_type = kwargs.pop('type', 'resnet')
+    model_type = kwargs.pop('type', 'resfuse')
 
     # Check if cifar data exists
     if not os.path.exists(path):
@@ -446,8 +439,13 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
             # decay learning rate when a plateau is hit
             # when overall validation acc becomes negative or increases smaller than 0.01
             # we decay learning rate by 0.8
-            if (val_acc / val_batches) - best_val_acc <= 0.005:
-                    new_lr = sh_lr.get_value() * 0.98
+            counter = 0
+            if (val_acc / val_batches) - best_val_acc < 0.005:
+                if counter < 3:
+                    counter += 1
+                else:
+                    counter = 0
+                    new_lr = sh_lr.get_value() * 0.995
                     print("New LR:" + str(new_lr))
                     sh_lr.set_value(lasagne.utils.floatX(new_lr))
 
@@ -515,6 +513,6 @@ if __name__ == '__main__':
         kwargs['path'] = kwargs['pwd'] + '/data/tiny-imagenet-100-A'
         kwargs['data'] = 'tiny-image-net'
 
-        kwargs['subsample'] = 1
+        kwargs['subsample'] = 0.1
 
         main(num_epochs=epochs, **kwargs)
