@@ -438,7 +438,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
 
             # adjust learning rate as in paper
             # 32k and 48k iterations should be roughly equivalent to 41 and 61 epochs
-            if (epoch + 1) == 61 or (epoch + 1) == 75:
+            if (epoch + 1) == 65 or (epoch + 1) == 85:
                 new_lr = sh_lr.get_value() * 0.1
                 print("New LR:" + str(new_lr))
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
@@ -499,7 +499,7 @@ if __name__ == '__main__':
         print("MODEL: saved model file to load (for validation) (default: None)")
     else:
         kwargs = {}
-        epochs = 90
+        epochs = 100
 
         if len(sys.argv) > 1:
             kwargs['type'] = sys.argv[1]
