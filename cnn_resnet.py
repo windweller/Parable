@@ -146,33 +146,78 @@ def residual_block(l, increase_dim=False, projection=False):
     return block
 
 
-# create a resfuse learning block with 2 stacked residual block layer
-def resfuse_block(l, increase_dim=False, projection=False, excessive=False):
+def resfuse_super_block(l, excessive=True):
     """
+    This puts 2 resfuse_block together,
+    and connect top to bottom (excessive connection)
+
+    if not excessive, we just return stack2
+
+    We also demand no dimension change
+    """
+    stack1 = resfuse_block(l)
+    stack2 = resfuse_block(stack1)
+
+    block = None
+    if excessive:
+        block = NonlinearityLayer(ElemwiseSumLayer([stack2, l]), nonlinearity=None)
+    else:
+        block = stack2
+
+    return block
+
+
+# create a resfuse learning block with 2 stacked residual block layer
+def resfuse_block(l):
+    """
+    Every resfuse block is made of 2 resblock
+    and top connect to bottom
+    We simply won't allow dimension increase in a simple
+    resfuse_block, dimension increase should be performed
+    by a single resnet block layer!
     Args:
         increase_dim: only affect the first resnet block
         excessive: whether we try to connect more, or less
     """
-    input_num_filters = l.output_shape[1]
-    o = None # store res_block's output
-    if increase_dim:
-        o = residual_block(l, increase_dim=True)
-        out_num_filters = input_num_filters * 2
-    else:
-        o = residual_block(l)
-        out_num_filters = input_num_filters
+    stack1 = residual_block(l)
+    stack2 = residual_block(stack1)
 
-    o = residual_block(o)
+    block = NonlinearityLayer(ElemwiseSumLayer([stack2, l]), nonlinearity=None)
 
-    # add shortcut connections
-    if increase_dim:
-        if projection:
-            raise NotImplementedError("projection on resfuse net isn't implemented yet")
-        else:
-            # identity shortcut
-            # this part might....break?
-            identity = ExpressionLayer(l, lambda X: X[:, :, ::2, ::2], lambda s: (s[0], s[1], s[2] // 2, s[3] // 2))
-            padding = PadLayer(identity, [out_num_filters // 4, 0, 0], batch_ndim=1)
+    return block
+
+
+def build_resfuse_net(input_var=None, n=5):
+    # Building the network
+    l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
+
+    # first layer, output is 16 x 64 x 64
+    l = batch_norm(ConvLayer(l_in, num_filters=16, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+                             W=lasagne.init.HeNormal(gain='relu')))
+
+    # first stack of residual blocks, output is 16 x 64 x 64
+    l = resfuse_block(l)
+    # 2 resfuse blocks
+    l = resfuse_super_block(l, excessive=False)
+
+    # second stack of residual blocks, output is 32 x 32 x 32
+    l = residual_block(l, increase_dim=True)
+    l = resfuse_super_block(l, excessive=False) # 4 res-blocks
+
+    # third stack of residual blocks, output is 64 x 16 x 16
+    l = residual_block(l, increase_dim=True)
+    l = resfuse_super_block(l, excessive=False)  # 4 res-blocks
+
+    # average pooling
+    l = GlobalPoolLayer(l)
+
+    # fully connected layer
+    network = DenseLayer(
+        l, num_units=100,
+        W=lasagne.init.HeNormal(),
+        nonlinearity=softmax)
+
+    return network
 
 
 def build_cnn(input_var=None, n=5):
@@ -441,11 +486,13 @@ if __name__ == '__main__':
         kwargs = {}
         epochs = 90
         if len(sys.argv) > 1:
-            kwargs['n'] = int(sys.argv[1])
+            kwargs['type'] = sys.argv[1]
         if len(sys.argv) > 2:
-            epochs = int(sys.argv[2])
+            kwargs['n'] = int(sys.argv[2])
         if len(sys.argv) > 3:
-            kwargs['model'] = sys.argv[3]
+            epochs = int(sys.argv[3])
+        if len(sys.argv) > 4:
+            kwargs['model'] = sys.argv[4]
 
         kwargs['pwd'] = os.path.dirname(os.path.realpath(__file__))
 
