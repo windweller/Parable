@@ -93,7 +93,7 @@ def load_data():
 
 # from lasagne.layers import Conv2DLayer as ConvLayer
 from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
-from lasagne.layers import ElemwiseSumLayer
+from lasagne.layers import ElemwiseSumLayer, MaxPool2DLayer
 from lasagne.layers import InputLayer
 from lasagne.layers import DenseLayer
 from lasagne.layers import GlobalPoolLayer
@@ -222,27 +222,34 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
 
 def build_cnn(input_var=None, n=5):
     # Building the network
+    # This is a ResNet-34 architecture, same as
+
     l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
 
     # first layer, output is 16 x 64 x 64
-    l = batch_norm(ConvLayer(l_in, num_filters=16, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+    l = batch_norm(ConvLayer(l_in, num_filters=64, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
                              W=lasagne.init.HeNormal(gain='relu')))
 
-    # we could pool aggressively here, but we don't have to
     # CIFAR-10 doesn't aggressively pool, and ImageNet 128x128 aggressively pools
+    l = MaxPool2DLayer(l, 2) # 32 x 32
 
-    # first stack of residual blocks, output is 16 x 64 x 64
-    for _ in range(n):
+    # first stack of residual blocks, output is 64 x 32 x 32
+    for _ in range(3):
         l = residual_block(l)
 
-    # second stack of residual blocks, output is 32 x 32 x 32
+    # second stack of residual blocks, output is 128 x 16 x 16
     l = residual_block(l, increase_dim=True)
-    for _ in range(1, n):
+    for _ in range(3):
         l = residual_block(l)
 
-    # third stack of residual blocks, output is 64 x 16 x 16
+    # third stack of residual blocks, output is 256 x 16 x 16
     l = residual_block(l, increase_dim=True)
-    for _ in range(1, n):
+    for _ in range(5):
+        l = residual_block(l)
+
+    # fourth stack of residual blocks, output is 512 x 8 x 8
+    l = residual_block(l, increase_dim=True)
+    for _ in range(2):
         l = residual_block(l)
 
     # average pooling
@@ -439,13 +446,8 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
             # decay learning rate when a plateau is hit
             # when overall validation acc becomes negative or increases smaller than 0.01
             # we decay learning rate by 0.8
-            counter = 0
-            if (val_acc / val_batches) - best_val_acc < 0.005:
-                if counter < 3:
-                    counter += 1
-                else:
-                    counter = 0
-                    new_lr = sh_lr.get_value() * 0.995
+            if (val_acc / val_batches) - best_val_acc <= 0.005:
+                    new_lr = sh_lr.get_value() * 0.98
                     print("New LR:" + str(new_lr))
                     sh_lr.set_value(lasagne.utils.floatX(new_lr))
 
