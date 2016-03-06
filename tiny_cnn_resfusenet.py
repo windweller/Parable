@@ -205,8 +205,8 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
     l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
 
     # # third stack of residual blocks, output is 64 x 16 x 16
-    l = residual_block(l, increase_dim=True)
-    l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
+    # l = residual_block(l, increase_dim=True)
+    # l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
 
     # average pooling
     l = GlobalPoolLayer(l)
