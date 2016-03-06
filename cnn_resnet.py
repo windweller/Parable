@@ -447,7 +447,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
             # when overall validation acc becomes negative or increases smaller than 0.01
             # we decay learning rate by 0.8
             if (val_acc / val_batches) - best_val_acc <= 0.005:
-                    new_lr = sh_lr.get_value() * 0.98
+                    new_lr = sh_lr.get_value() * 0.995
                     print("New LR:" + str(new_lr))
                     sh_lr.set_value(lasagne.utils.floatX(new_lr))
 
