@@ -187,7 +187,7 @@ def resfuse_block(l):
     return block
 
 
-def build_resfuse_net(input_var=None, n=5):
+def build_resfuse_net(input_var=None, n=5, execessive=False):
     # Building the network
     l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
 
@@ -198,15 +198,15 @@ def build_resfuse_net(input_var=None, n=5):
     # first stack of residual blocks, output is 16 x 64 x 64
     l = resfuse_block(l)
     # 2 resfuse blocks
-    l = resfuse_super_block(l, excessive=False)
+    l = resfuse_super_block(l, excessive=execessive)
 
     # second stack of residual blocks, output is 32 x 32 x 32
     l = residual_block(l, increase_dim=True)
-    l = resfuse_super_block(l, excessive=False) # 4 res-blocks
+    l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
 
     # third stack of residual blocks, output is 64 x 16 x 16
     l = residual_block(l, increase_dim=True)
-    l = resfuse_super_block(l, excessive=False)  # 4 res-blocks
+    l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
 
     # average pooling
     l = GlobalPoolLayer(l)
@@ -294,11 +294,13 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
         **kwargs:
         - path: direct path to CIFAR-10 or TinyImageNet
         - data: "cifar-10" or "tiny-image-net"
+        - type: 'resnet' or 'resfuse' or 'resfuse-max'
     """
 
     # Unpack keyword arguments
     path = kwargs.pop('path', './cifar-10-batches-py')
     data_name = kwargs.pop('data', 'cifar-10')
+    model_type = kwargs.pop('type', 'resnet')
 
     # Check if cifar data exists
     if not os.path.exists(path):
@@ -332,7 +334,16 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
 
     # Create neural network model
     print("Building model and compiling functions...")
-    network = build_cnn(input_var, n)
+    if model_type == 'resnet':  # 'resnet' or 'resfuse' or 'resfuse-max'
+        network = build_cnn(input_var, n)
+        print("ResNet")
+    elif model_type == 'resfuse':
+        network = build_resfuse_net(input_var, n, execessive=False)
+    elif model_type == 'resfuse-max':
+        network = build_resfuse_net(input_var, n, execessive=True)
+    else:
+        raise ValueError("model type must be from resnet, resfuse, resfuse-max")
+
     print("number of parameters in model: %d" % lasagne.layers.count_params(network, trainable=True))
 
     if model is None:
