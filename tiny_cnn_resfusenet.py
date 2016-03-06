@@ -202,9 +202,9 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
     # first stack of residual blocks, output is 16 x 64 x 64
     l = resfuse_block(l, residual=1)
     # 2 resfuse blocks
-    l = resfuse_super_block(l, residual=1, excessive=execessive)
-    l = resfuse_super_block(l, residual=1, excessive=execessive)
-    l = resfuse_super_block(l, residual=1, excessive=execessive)
+    l = resfuse_super_block(l, residual=0.1, excessive=execessive)
+    l = resfuse_super_block(l, residual=0.01, excessive=execessive)
+    l = resfuse_super_block(l, residual=0.001, excessive=execessive)
 
     # # second stack of residual blocks, output is 32 x 32 x 32
     # l = residual_block(l, increase_dim=True)
