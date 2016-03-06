@@ -196,7 +196,7 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
     l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
 
     # first layer, output is 16 x 64 x 64
-    l = batch_norm(ConvLayer(l_in, num_filters=16, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+    l = batch_norm(ConvLayer(l_in, num_filters=64, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
                              W=lasagne.init.HeNormal(gain='relu')))
 
     # first stack of residual blocks, output is 16 x 64 x 64
@@ -205,6 +205,10 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
     l = resfuse_super_block(l, residual=1, excessive=execessive)
     l = resfuse_super_block(l, residual=0.1, excessive=execessive)
     l = resfuse_super_block(l, residual=0.1, excessive=execessive)
+
+    l = resfuse_super_block(l, residual=0.01, excessive=execessive)
+    l = resfuse_super_block(l, residual=0.01, excessive=execessive)
+    l = resfuse_super_block(l, residual=0.01, excessive=execessive)
 
     # # second stack of residual blocks, output is 32 x 32 x 32
     # l = residual_block(l, increase_dim=True)
@@ -507,7 +511,7 @@ if __name__ == '__main__':
         print("MODEL: saved model file to load (for validation) (default: None)")
     else:
         kwargs = {}
-        epochs = 100
+        epochs = 90
 
         if len(sys.argv) > 1:
             kwargs['type'] = sys.argv[1]
@@ -523,6 +527,6 @@ if __name__ == '__main__':
         kwargs['path'] = kwargs['pwd'] + '/data/tiny-imagenet-100-A'
         kwargs['data'] = 'tiny-image-net'
 
-        kwargs['subsample'] = 0.1
+        kwargs['subsample'] = 1
 
         main(num_epochs=epochs, **kwargs)
