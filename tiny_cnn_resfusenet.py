@@ -196,9 +196,9 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
                              W=lasagne.init.HeNormal(gain='relu')))
 
     # first stack of residual blocks, output is 16 x 64 x 64
-    l = resfuse_super_block(l, excessive=True)
+    l = resfuse_block(l)
     # 2 resfuse blocks
-    # l = resfuse_super_block(l, excessive=execessive)
+    l = resfuse_super_block(l, excessive=execessive)
 
     # # second stack of residual blocks, output is 32 x 32 x 32
     # l = residual_block(l, increase_dim=True)
