@@ -196,7 +196,7 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
                              W=lasagne.init.HeNormal(gain='relu')))
 
     # first stack of residual blocks, output is 16 x 64 x 64
-    l = resfuse_block(l)
+    l = resfuse_super_block(l)
     # 2 resfuse blocks
     # l = resfuse_super_block(l, excessive=execessive)
 
@@ -439,15 +439,15 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
             # decay learning rate when a plateau is hit
             # when overall validation acc becomes negative or increases smaller than 0.01
             # we decay learning rate by 0.8
-            # counter = 0
-            # if (val_acc / val_batches) - best_val_acc < 0.005:
-            #     if counter < 3:
-            #         counter += 1
-            #     else:
-            #         counter = 0
-            #         new_lr = sh_lr.get_value() * 0.995
-            #         print("New LR:" + str(new_lr))
-            #         sh_lr.set_value(lasagne.utils.floatX(new_lr))
+            counter = 0
+            if (val_acc / val_batches) - best_val_acc < 0.005:
+                if counter < 3:
+                    counter += 1
+                else:
+                    counter = 0
+                    new_lr = sh_lr.get_value() * 0.995
+                    print("New LR:" + str(new_lr))
+                    sh_lr.set_value(lasagne.utils.floatX(new_lr))
 
             if (val_acc / val_batches) > best_val_acc:
                 best_val_acc = val_acc / val_batches
