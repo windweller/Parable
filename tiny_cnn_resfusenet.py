@@ -2,7 +2,7 @@
 
 """
 Lasagne implementation of CIFAR-10 examples from "Deep Residual Learning for Image Recognition" (http://arxiv.org/abs/1512.03385)
-Check the accompanying files for pretrained models. The 32-layer network (n=5), achieves a validation error of 7.42%, 
+Check the accompanying files for pretrained models. The 32-layer network (n=5), achieves a validation error of 7.42%,
 while the 56-layer network (n=9) achieves error of 6.75%, which is roughly equivalent to the examples in the paper.
 """
 
@@ -198,15 +198,15 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
     # first stack of residual blocks, output is 16 x 64 x 64
     l = resfuse_block(l)
     # 2 resfuse blocks
-    l = resfuse_super_block(l, excessive=execessive)
+    # l = resfuse_super_block(l, excessive=execessive)
 
-    # second stack of residual blocks, output is 32 x 32 x 32
-    l = residual_block(l, increase_dim=True)
-    l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
-
-    # third stack of residual blocks, output is 64 x 16 x 16
-    l = residual_block(l, increase_dim=True)
-    l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
+    # # second stack of residual blocks, output is 32 x 32 x 32
+    # l = residual_block(l, increase_dim=True)
+    # l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
+    #
+    # # third stack of residual blocks, output is 64 x 16 x 16
+    # l = residual_block(l, increase_dim=True)
+    # l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
 
     # average pooling
     l = GlobalPoolLayer(l)
@@ -270,7 +270,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False, augment=False
         else:
             excerpt = slice(start_idx, start_idx + batchsize)
         if augment:
-            # as in paper : 
+            # as in paper :
             # pad feature arrays with 4 pixels on each side
             # and do random cropping of 64x64
             padded = np.pad(inputs[excerpt], ((0, 0), (0, 0), (4, 4), (4, 4)), mode='constant')
@@ -300,7 +300,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
     # Unpack keyword arguments
     path = kwargs.pop('path', './cifar-10-batches-py')
     data_name = kwargs.pop('data', 'cifar-10')
-    model_type = kwargs.pop('type', 'resnet')
+    model_type = kwargs.pop('type', 'resfuse')
 
     # Check if cifar data exists
     if not os.path.exists(path):
@@ -513,6 +513,6 @@ if __name__ == '__main__':
         kwargs['path'] = kwargs['pwd'] + '/data/tiny-imagenet-100-A'
         kwargs['data'] = 'tiny-image-net'
 
-        kwargs['subsample'] = 1
+        kwargs['subsample'] = 0.1
 
         main(num_epochs=epochs, **kwargs)
