@@ -146,7 +146,7 @@ def residual_block(l, increase_dim=False, projection=False):
     return block
 
 
-def resfuse_super_block(l, excessive=True):
+def resfuse_super_block(l, residual=1e-3, excessive=True):
     """
     This puts 2 resfuse_block together,
     and connect top to bottom (excessive connection)
@@ -155,8 +155,8 @@ def resfuse_super_block(l, excessive=True):
 
     We also demand no dimension change
     """
-    stack1 = resfuse_block(l)
-    stack2 = resfuse_block(stack1)
+    stack1 = resfuse_block(l, residual)
+    stack2 = resfuse_block(stack1, residual)
 
     block = None
     if excessive:
@@ -168,9 +168,11 @@ def resfuse_super_block(l, excessive=True):
 
 
 # create a resfuse learning block with 2 stacked residual block layer
-def resfuse_block(l, residual=0.01):
+def resfuse_block(l, residual=1e-3):
     """
-    residual: a hyperparameter of how much to leak in
+    residual: a hyperparameter of how much to leak in (should be small,
+    or loss will explode: when it = 1, training loss: 2217594.131540)
+    (such effect will be even higher with deeper layers)
 
     Every resfuse block is made of 2 resblock
     and top connect to bottom
@@ -198,15 +200,19 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
                              W=lasagne.init.HeNormal(gain='relu')))
 
     # first stack of residual blocks, output is 16 x 64 x 64
-    l = resfuse_block(l)
+    l = resfuse_block(l, residual=1)
     # 2 resfuse blocks
-    l = resfuse_super_block(l, excessive=execessive)
+    l = resfuse_super_block(l, residual=1, excessive=execessive)
+    l = resfuse_super_block(l, residual=1, excessive=execessive)
+    l = resfuse_super_block(l, residual=1, excessive=execessive)
 
     # # second stack of residual blocks, output is 32 x 32 x 32
-    l = residual_block(l, increase_dim=True)
-    l = resfuse_block(l)
-    # l = resfuse_super_block(l, excessive=execessive)
-    # l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
+    # l = residual_block(l, increase_dim=True)
+    # l = resfuse_super_block(l, residual=1e-3)
+    # l = resfuse_super_block(l, residual=1e-4)  # 4 res-blocks
+    #
+    # l = resfuse_super_block(l, residual=1e-5)  # 4 res-blocks
+    # l = resfuse_super_block(l, residual=1e-5)  # 4 res-blocks
 
     # # third stack of residual blocks, output is 64 x 16 x 16
     # l = residual_block(l, increase_dim=True)
