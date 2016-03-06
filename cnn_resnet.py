@@ -339,8 +339,10 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
         print("ResNet")
     elif model_type == 'resfuse':
         network = build_resfuse_net(input_var, n, execessive=False)
+        print("ResFuse Net")
     elif model_type == 'resfuse-max':
         network = build_resfuse_net(input_var, n, execessive=True)
+        print("ResFuse Max Net")
     else:
         raise ValueError("model type must be from resnet, resfuse, resfuse-max")
 
@@ -496,6 +498,7 @@ if __name__ == '__main__':
     else:
         kwargs = {}
         epochs = 90
+
         if len(sys.argv) > 1:
             kwargs['type'] = sys.argv[1]
         if len(sys.argv) > 2:
