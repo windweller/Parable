@@ -512,6 +512,6 @@ if __name__ == '__main__':
         kwargs['path'] = kwargs['pwd'] + '/data/tiny-imagenet-100-A'
         kwargs['data'] = 'tiny-image-net'
 
-        kwargs['subsample'] = 1
+        kwargs['subsample'] = 0.1
 
         main(num_epochs=epochs, **kwargs)
