@@ -178,7 +178,8 @@ def resfuse_block(l, residual=1, projection=True):
         assert block.output_shape == stack2.output_shape
         block = NonlinearityLayer(ElemwiseSumLayer([block, stack2]), nonlinearity=None)
     else:
-        block = NonlinearityLayer(ElemwiseSumLayer([stack2, l], coeffs=residual), nonlinearity=None)
+        # block = NonlinearityLayer(ElemwiseSumLayer([stack2, l], coeffs=residual), nonlinearity=None)
+        block = stack2  # no summation, just regular resnet block
 
     return block
 
@@ -195,9 +196,10 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
 
     # first stack of residual blocks, output is 16 x 64 x 64
     l = resfuse_block(l)
+    l = residual_block(l, increase_dim=True)
     l = resfuse_block(l)
+    l = residual_block(l, increase_dim=True)
     l = resfuse_block(l)
-
 
     # l = resfuse_block(l)
     # l = resfuse_block(l)
