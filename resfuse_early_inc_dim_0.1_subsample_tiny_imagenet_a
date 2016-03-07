@@ -1,0 +1,96 @@
+# first layer, output is 16 x 64 x 64
+l = batch_norm(ConvLayer(l_in, num_filters=64, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+                         W=lasagne.init.HeNormal(gain='relu')))
+
+l = MaxPool2DLayer(l, 2)
+
+# first stack of residual blocks, output is 16 x 64 x 64
+l = resfuse_block(l)
+l = residual_block(l, increase_dim=True)
+l = resfuse_block(l)
+l = residual_block(l, increase_dim=True)
+l = resfuse_block(l)
+
+Using gpu device 0: GRID K520 (CNMeM is enabled)
+/home/ubuntu/.local/lib/python2.7/site-packages/theano/tensor/signal/downsample.py:5: UserWarning: downsample module has been moved to the pool module.
+  warnings.warn("downsample module has been moved to the pool module.")
+Loading data...
+loading training data for synset 20 / 100
+loading training data for synset 40 / 100
+loading training data for synset 60 / 100
+loading training data for synset 80 / 100
+loading training data for synset 100 / 100
+Building model and compiling functions...
+ResFuse Net
+number of parameters in model: 4322084
+Starting training...
+Epoch 1 of 90 took 0.830m
+  training loss:		5.712709
+  validation loss:		18.997367
+  validation accuracy:		2.26 %
+ top 5 validation accuracy:		9.48 %
+Epoch 2 of 90 took 0.830m
+  training loss:		4.936193
+  validation loss:		4.363244
+  validation accuracy:		7.90 %
+ top 5 validation accuracy:		25.96 %
+Epoch 3 of 90 took 0.830m
+  training loss:		4.658630
+  validation loss:		4.220636
+  validation accuracy:		9.52 %
+ top 5 validation accuracy:		28.88 %
+Epoch 4 of 90 took 0.831m
+  training loss:		4.491922
+  validation loss:		3.932002
+  validation accuracy:		11.68 %
+ top 5 validation accuracy:		32.40 %
+Epoch 5 of 90 took 0.830m
+  training loss:		4.323792
+  validation loss:		4.113633
+  validation accuracy:		12.46 %
+ top 5 validation accuracy:		32.84 %
+Epoch 6 of 90 took 0.830m
+  training loss:		4.209188
+  validation loss:		3.987377
+  validation accuracy:		12.82 %
+ top 5 validation accuracy:		35.92 %
+New LR:0.0995000014827
+Epoch 7 of 90 took 0.830m
+  training loss:		4.076321
+  validation loss:		3.916998
+  validation accuracy:		13.52 %
+ top 5 validation accuracy:		36.74 %
+Epoch 8 of 90 took 0.830m
+  training loss:		3.975194
+  validation loss:		3.816186
+  validation accuracy:		16.04 %
+ top 5 validation accuracy:		39.10 %
+Epoch 9 of 90 took 0.831m
+  training loss:		3.903189
+  validation loss:		3.875115
+  validation accuracy:		16.06 %
+ top 5 validation accuracy:		40.14 %
+New LR:0.0990025004745
+Epoch 10 of 90 took 0.831m
+  training loss:		3.761876
+  validation loss:		4.232416
+  validation accuracy:		14.76 %
+ top 5 validation accuracy:		36.16 %
+New LR:0.0985074903443
+Epoch 11 of 90 took 0.830m
+  training loss:		3.649358
+  validation loss:		3.651312
+  validation accuracy:		18.98 %
+ top 5 validation accuracy:		44.64 %
+Epoch 12 of 90 took 0.830m
+  training loss:		3.551723
+  validation loss:		3.943930
+  validation accuracy:		17.08 %
+ top 5 validation accuracy:		41.80 %
+New LR:0.0980149562657
+Epoch 13 of 90 took 0.830m
+  training loss:		3.407887
+  validation loss:		3.780911
+  validation accuracy:		18.20 %
+ top 5 validation accuracy:		43.22 %
+New LR:0.0975248834118
