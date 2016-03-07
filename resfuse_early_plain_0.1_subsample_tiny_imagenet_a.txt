@@ -1,3 +1,14 @@
+# first layer, output is 16 x 64 x 64
+l = batch_norm(ConvLayer(l_in, num_filters=64, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+                         W=lasagne.init.HeNormal(gain='relu')))
+
+l = MaxPool2DLayer(l, 2)
+
+# first stack of residual blocks, output is 16 x 64 x 64
+l = resfuse_block(l)
+l = resfuse_block(l)
+l = resfuse_block(l)
+
 Using gpu device 0: GRID K520 (CNMeM is enabled)
 /home/ubuntu/.local/lib/python2.7/site-packages/theano/tensor/signal/downsample.py:5: UserWarning: downsample module has been moved to the pool module.
   warnings.warn("downsample module has been moved to the pool module.")

@@ -195,11 +195,11 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
     l = MaxPool2DLayer(l, 2)
 
     # first stack of residual blocks, output is 16 x 64 x 64
-    l = resfuse_block(l)
+    l = resfuse_block(l, projection=False)
     l = residual_block(l, increase_dim=True)
-    l = resfuse_block(l)
+    l = resfuse_block(l, projection=False)
     l = residual_block(l, increase_dim=True)
-    l = resfuse_block(l)
+    l = resfuse_block(l, projection=False)
 
     # l = resfuse_block(l)
     # l = resfuse_block(l)
