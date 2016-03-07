@@ -169,7 +169,8 @@ def resfuse_block(l, residual=1, projection=True):
     stack1 = residual_block(l)
     stack2 = residual_block(stack1)
 
-    print("stack2 output shape: " + stack2.output_shape)
+    print("stack2 output shape: ")
+    print(stack2.output_shape)
 
     block = None
 
@@ -177,7 +178,8 @@ def resfuse_block(l, residual=1, projection=True):
         block = batch_norm(
             ConvLayer(l, num_filters=input_num_filters, filter_size=(3, 3), stride=(1, 1), nonlinearity=None,
                       pad='same', b=None, name="resfuse_projection"))
-        print("block output shape: " + block.output_shape)
+        print("block output shape: ")
+        print(block.output_shape)
         block = NonlinearityLayer(ElemwiseSumLayer([stack2, block]), nonlinearity=None)
     else:
         block = NonlinearityLayer(ElemwiseSumLayer([stack2, l], coeffs=residual), nonlinearity=None)
