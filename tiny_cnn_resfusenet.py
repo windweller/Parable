@@ -175,9 +175,9 @@ def resfuse_block(l, residual=1, projection=True):
         block = batch_norm(
             ConvLayer(l, num_filters=input_num_filters, filter_size=(1, 1), stride=(1, 1), nonlinearity=None,
                       pad='same', b=None, name="resfuse_projection"))
+        block = NonlinearityLayer(ElemwiseSumLayer([stack2, block]), nonlinearity=None)
     else:
         block = NonlinearityLayer(ElemwiseSumLayer([stack2, l], coeffs=residual), nonlinearity=None)
-
 
     return block
 
