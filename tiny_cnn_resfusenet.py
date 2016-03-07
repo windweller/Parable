@@ -93,7 +93,7 @@ def load_data():
 
 # from lasagne.layers import Conv2DLayer as ConvLayer
 from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
-from lasagne.layers import ElemwiseSumLayer
+from lasagne.layers import ElemwiseSumLayer, MaxPool2DLayer
 from lasagne.layers import InputLayer
 from lasagne.layers import DenseLayer
 from lasagne.layers import GlobalPoolLayer
@@ -190,6 +190,8 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
     # first layer, output is 16 x 64 x 64
     l = batch_norm(ConvLayer(l_in, num_filters=64, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
                              W=lasagne.init.HeNormal(gain='relu')))
+
+    l = MaxPool2DLayer(l, 2)
 
     # first stack of residual blocks, output is 16 x 64 x 64
     l = resfuse_block(l)
