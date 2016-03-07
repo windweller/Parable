@@ -204,15 +204,18 @@ def build_resfuse_net(input_var=None, projection=True):
     # first stack of residual blocks, output is 64 x 32 x 32 (2 residual blocks) (4 conv layers)
     l = resfuse_block(l, projection=projection)
 
-    l = residual_block(l, increase_dim=True) # 128 x 16 x 16 (1 res block) (2 conv layers)
+    l = residual_block(l, increase_dim=True)  # 128 x 16 x 16 (1 res block) (2 conv layers)
 
     l = resfuse_block(l, projection=projection)  # 128 x 16 x 16 (2 residual blocks) (4 conv layers)
 
-    l = residual_block(l, increase_dim=True) # 256 x 8 x 8 (1 residual blocks) (2 conv layers)
+    l = residual_block(l, increase_dim=True)  # 256 x 8 x 8 (1 residual blocks) (2 conv layers)
 
-    l = resfuse_block(l, projection=projection) # 256 x 8 x 8 (2 residual blocks) (4 conv layers)
+    l = resfuse_block(l, projection=projection)  # 256 x 8 x 8 (2 residual blocks) (4 conv layers)
+    l = resfuse_block(l, projection=projection)  # 256 x 8 x 8 (2 residual blocks) (4 conv layers)
 
-    # 4 + 2 + 4 + 2 + 4 + 3 = 19 layers
+    l = residual_block(l, increase_dim=True)  # 512 x 4 x 4 (1 res block) (2 conv layers)
+
+    # (4 + 2) * 2 + 4 * 2 + 2 + 3 = 25 layers
 
     # average pooling
     l = GlobalPoolLayer(l)
@@ -407,7 +410,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
             train_err = 0
             train_batches = 0
             start_time = time.time()
-            for batch in iterate_minibatches(X_train, Y_train, 128, shuffle=True, augment=True):
+            for batch in iterate_minibatches(X_train, Y_train, 256, shuffle=True, augment=True):
                 inputs, targets = batch
                 train_err += train_fn(inputs, targets)
                 train_batches += 1
@@ -438,7 +441,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
 
             # adjust learning rate as in paper
             # 32k and 48k iterations should be roughly equivalent to 41 and 61 epochs
-            if (epoch + 1) == 30 or (epoch + 1) == 50 or (epoch + 1) == 75:
+            if (epoch + 1) == 40 or (epoch + 1) == 70:
                 new_lr = sh_lr.get_value() * 0.1
                 print("New LR:" + str(new_lr))
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
@@ -446,10 +449,11 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
             # decay learning rate when a plateau is hit
             # when overall validation acc becomes negative or increases smaller than 0.01
             # we decay learning rate by 0.8
-            if (val_acc / val_batches) - best_val_acc <= 0.005:
-                new_lr = sh_lr.get_value() * 0.995
-                print("New LR:" + str(new_lr))
-                sh_lr.set_value(lasagne.utils.floatX(new_lr))
+
+            # if (val_acc / val_batches) - best_val_acc <= 0.005:
+            #     new_lr = sh_lr.get_value() * 0.995
+            #     print("New LR:" + str(new_lr))
+            #     sh_lr.set_value(lasagne.utils.floatX(new_lr))
 
             if (val_acc / val_batches) > best_val_acc:
                 best_val_acc = val_acc / val_batches
