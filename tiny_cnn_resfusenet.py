@@ -147,11 +147,13 @@ def residual_block(l, increase_dim=False, projection=False):
 
 
 # create a resfuse learning block with 2 stacked residual block layer
-def resfuse_block(l, residual=1e-3, projection=True):
+def resfuse_block(l, residual=1, projection=True):
     """
     residual: a hyperparameter of how much to leak in (should be small,
     or loss will explode: when it = 1, training loss: 2217594.131540)
     (such effect will be even higher with deeper layers)
+
+    If we don't do projection, then the loss will just explode
 
     Every resfuse block is made of 2 resblock
     and top connect to bottom
@@ -172,7 +174,7 @@ def resfuse_block(l, residual=1e-3, projection=True):
     if projection:
         block = batch_norm(
             ConvLayer(l, num_filters=input_num_filters, filter_size=(1, 1), stride=(1, 1), nonlinearity=None,
-                      pad='same', b=None))
+                      pad='same', b=None, name="resfuse_projection"))
     else:
         block = NonlinearityLayer(ElemwiseSumLayer([stack2, l], coeffs=residual), nonlinearity=None)
 
@@ -189,10 +191,13 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
                              W=lasagne.init.HeNormal(gain='relu')))
 
     # first stack of residual blocks, output is 16 x 64 x 64
-    l = resfuse_block(l, residual=1)
-    l = resfuse_block(l, residual=1)
-    l = resfuse_block(l, residual=1)
-    l = resfuse_block(l, residual=1)
+    l = resfuse_block(l)
+
+    l = resfuse_block(l)
+    l = resfuse_block(l)
+    l = resfuse_block(l)
+    l = resfuse_block(l)
+    l = resfuse_block(l)
     # 2 resfuse blocks
 
     # # second stack of residual blocks, output is 32 x 32 x 32
@@ -430,7 +435,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
 
             # adjust learning rate as in paper
             # 32k and 48k iterations should be roughly equivalent to 41 and 61 epochs
-            if (epoch + 1) == 55 or (epoch + 1) == 75:
+            if (epoch + 1) == 55 or (epoch + 1) == 85:
                 new_lr = sh_lr.get_value() * 0.1
                 print("New LR:" + str(new_lr))
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
@@ -438,15 +443,10 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
             # decay learning rate when a plateau is hit
             # when overall validation acc becomes negative or increases smaller than 0.01
             # we decay learning rate by 0.8
-            counter = 0
-            if (val_acc / val_batches) - best_val_acc < 0.005:
-                if counter < 3:
-                    counter += 1
-                else:
-                    counter = 0
-                    new_lr = sh_lr.get_value() * 0.995
-                    print("New LR:" + str(new_lr))
-                    sh_lr.set_value(lasagne.utils.floatX(new_lr))
+            if (val_acc / val_batches) - best_val_acc <= 0.005:
+                new_lr = sh_lr.get_value() * 0.995
+                print("New LR:" + str(new_lr))
+                sh_lr.set_value(lasagne.utils.floatX(new_lr))
 
             if (val_acc / val_batches) > best_val_acc:
                 best_val_acc = val_acc / val_batches
