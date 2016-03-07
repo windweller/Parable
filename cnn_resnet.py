@@ -478,7 +478,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
     test_batches = 0
     for batch in iterate_minibatches(X_test, Y_test, 128, shuffle=False):
         inputs, targets = batch
-        err, acc = val_fn(inputs, targets)
+        err, acc, predictions = val_fn(inputs, targets)
         test_err += err
         test_acc += acc
         test_batches += 1

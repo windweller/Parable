@@ -184,38 +184,35 @@ def resfuse_block(l, residual=1, projection=True):
     return block
 
 
-def build_resfuse_net(input_var=None, n=5, execessive=False):
+def build_resfuse_net(input_var=None, projection=True):
+    """
+
+    Args:
+        projection: If False, we are using pure ResNet
+    Returns:
+
+    """
     # Building the network
     l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
 
-    # first layer, output is 16 x 64 x 64
+    # first layer, output is 64 x 64 x 64
     l = batch_norm(ConvLayer(l_in, num_filters=64, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
                              W=lasagne.init.HeNormal(gain='relu')))
 
-    l = MaxPool2DLayer(l, 2)
+    l = MaxPool2DLayer(l, 2)  # 64 x 32 x 32
 
-    # first stack of residual blocks, output is 16 x 64 x 64
-    l = resfuse_block(l, projection=False)
-    l = residual_block(l, increase_dim=True)
-    l = resfuse_block(l, projection=False)
-    l = residual_block(l, increase_dim=True)
+    # first stack of residual blocks, output is 64 x 32 x 32 (2 residual blocks) (4 conv layers)
     l = resfuse_block(l, projection=False)
 
-    # l = resfuse_block(l)
-    # l = resfuse_block(l)
-    # 2 resfuse blocks
+    l = residual_block(l, increase_dim=True) # 128 x 16 x 16 (1 res block) (2 conv layers)
 
-    # # second stack of residual blocks, output is 32 x 32 x 32
-    # l = residual_block(l, increase_dim=True)
-    # l = resfuse_super_block(l, residual=1e-3)
-    # l = resfuse_super_block(l, residual=1e-4)  # 4 res-blocks
-    #
-    # l = resfuse_super_block(l, residual=1e-5)  # 4 res-blocks
-    # l = resfuse_super_block(l, residual=1e-5)  # 4 res-blocks
+    l = resfuse_block(l, projection=False)  # 128 x 16 x 16 (2 residual blocks) (4 conv layers)
 
-    # # third stack of residual blocks, output is 64 x 16 x 16
-    # l = residual_block(l, increase_dim=True)
-    # l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
+    l = residual_block(l, increase_dim=True) # 256 x 8 x 8 (1 residual blocks) (2 conv layers)
+
+    l = resfuse_block(l, projection=False) # 256 x 8 x 8 (2 residual blocks) (4 conv layers)
+
+    # 4 + 2 + 4 + 2 + 4 + 3 = 19 layers
 
     # average pooling
     l = GlobalPoolLayer(l)
@@ -344,13 +341,14 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
     # Create neural network model
     print("Building model and compiling functions...")
     if model_type == 'resnet':  # 'resnet' or 'resfuse' or 'resfuse-max'
-        network = build_cnn(input_var, n)
+        # network = build_cnn(input_var, n)
+        network = build_resfuse_net(input_var, projection=False)
         print("ResNet")
     elif model_type == 'resfuse':
-        network = build_resfuse_net(input_var, n, execessive=False)
+        network = build_resfuse_net(input_var, projection=True)
         print("ResFuse Net")
     elif model_type == 'resfuse-max':
-        network = build_resfuse_net(input_var, n, execessive=True)
+        network = build_resfuse_net(input_var)
         print("ResFuse Max Net")
     else:
         raise ValueError("model type must be from resnet, resfuse, resfuse-max")
@@ -440,7 +438,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
 
             # adjust learning rate as in paper
             # 32k and 48k iterations should be roughly equivalent to 41 and 61 epochs
-            if (epoch + 1) == 55 or (epoch + 1) == 85:
+            if (epoch + 1) == 30 or (epoch + 1) == 50 or (epoch + 1) == 75:
                 new_lr = sh_lr.get_value() * 0.1
                 print("New LR:" + str(new_lr))
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
@@ -480,7 +478,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
     test_batches = 0
     for batch in iterate_minibatches(X_test, Y_test, 128, shuffle=False):
         inputs, targets = batch
-        err, acc = val_fn(inputs, targets)
+        err, acc, predictions = val_fn(inputs, targets)
         test_err += err
         test_acc += acc
         test_batches += 1
@@ -517,6 +515,6 @@ if __name__ == '__main__':
         kwargs['path'] = kwargs['pwd'] + '/data/tiny-imagenet-100-A'
         kwargs['data'] = 'tiny-image-net'
 
-        kwargs['subsample'] = 0.1
+        kwargs['subsample'] = 1
 
         main(num_epochs=epochs, **kwargs)
