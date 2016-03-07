@@ -146,29 +146,8 @@ def residual_block(l, increase_dim=False, projection=False):
     return block
 
 
-def resfuse_super_block(l, residual=1e-3, excessive=True):
-    """
-    This puts 2 resfuse_block together,
-    and connect top to bottom (excessive connection)
-
-    if not excessive, we just return stack2
-
-    We also demand no dimension change
-    """
-    stack1 = resfuse_block(l, residual)
-    stack2 = resfuse_block(stack1, residual)
-
-    block = None
-    if excessive:
-        block = NonlinearityLayer(ElemwiseSumLayer([stack2, l]), nonlinearity=None)
-    else:
-        block = stack2
-
-    return block
-
-
 # create a resfuse learning block with 2 stacked residual block layer
-def resfuse_block(l, residual=1e-3):
+def resfuse_block(l, residual=1e-3, projection=True):
     """
     residual: a hyperparameter of how much to leak in (should be small,
     or loss will explode: when it = 1, training loss: 2217594.131540)
@@ -183,10 +162,20 @@ def resfuse_block(l, residual=1e-3):
         increase_dim: only affect the first resnet block
         excessive: whether we try to connect more, or less
     """
+    input_num_filters = l.output_shape[1]
+
     stack1 = residual_block(l)
     stack2 = residual_block(stack1)
 
-    block = NonlinearityLayer(ElemwiseSumLayer([stack2, l], coeffs=residual), nonlinearity=None)
+    block = None
+
+    if projection:
+        block = batch_norm(
+            ConvLayer(l, num_filters=input_num_filters, filter_size=(1, 1), stride=(1, 1), nonlinearity=None,
+                      pad='same', b=None))
+    else:
+        block = NonlinearityLayer(ElemwiseSumLayer([stack2, l], coeffs=residual), nonlinearity=None)
+
 
     return block
 
@@ -201,14 +190,10 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
 
     # first stack of residual blocks, output is 16 x 64 x 64
     l = resfuse_block(l, residual=1)
+    l = resfuse_block(l, residual=1)
+    l = resfuse_block(l, residual=1)
+    l = resfuse_block(l, residual=1)
     # 2 resfuse blocks
-    l = resfuse_super_block(l, residual=1, excessive=execessive)
-    l = resfuse_super_block(l, residual=0.1, excessive=execessive)
-    l = resfuse_super_block(l, residual=0.1, excessive=execessive)
-
-    l = resfuse_super_block(l, residual=0.01, excessive=execessive)
-    l = resfuse_super_block(l, residual=0.01, excessive=execessive)
-    l = resfuse_super_block(l, residual=0.01, excessive=execessive)
 
     # # second stack of residual blocks, output is 32 x 32 x 32
     # l = residual_block(l, increase_dim=True)
@@ -445,7 +430,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
 
             # adjust learning rate as in paper
             # 32k and 48k iterations should be roughly equivalent to 41 and 61 epochs
-            if (epoch + 1) == 65 or (epoch + 1) == 85:
+            if (epoch + 1) == 55 or (epoch + 1) == 75:
                 new_lr = sh_lr.get_value() * 0.1
                 print("New LR:" + str(new_lr))
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
