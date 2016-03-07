@@ -169,18 +169,14 @@ def resfuse_block(l, residual=1, projection=True):
     stack1 = residual_block(l)
     stack2 = residual_block(stack1)
 
-    print("stack2 output shape: ")
-    print(stack2.output_shape)
-
     block = None
 
     if projection:
         block = batch_norm(
-            ConvLayer(l, num_filters=input_num_filters, filter_size=(3, 3), stride=(1, 1), nonlinearity=None,
+            ConvLayer(l, num_filters=input_num_filters, filter_size=(1, 1), stride=(1, 1), nonlinearity=None,
                       pad='same', b=None, name="resfuse_projection"))
-        print("block output shape: ")
-        print(block.output_shape)
-        block = NonlinearityLayer(ElemwiseSumLayer([stack2, block]), nonlinearity=None)
+        assert block.output_shape == stack2.output_shape
+        block = NonlinearityLayer(ElemwiseSumLayer([block, stack2]), nonlinearity=None)
     else:
         block = NonlinearityLayer(ElemwiseSumLayer([stack2, l], coeffs=residual), nonlinearity=None)
 
@@ -198,8 +194,8 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
     # first stack of residual blocks, output is 16 x 64 x 64
     l = resfuse_block(l)
 
-    l = resfuse_block(l)
-    l = resfuse_block(l)
+    # l = resfuse_block(l)
+    # l = resfuse_block(l)
     # 2 resfuse blocks
 
     # # second stack of residual blocks, output is 32 x 32 x 32
