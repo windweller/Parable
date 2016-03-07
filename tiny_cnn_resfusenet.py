@@ -410,7 +410,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
             train_err = 0
             train_batches = 0
             start_time = time.time()
-            for batch in iterate_minibatches(X_train, Y_train, 256, shuffle=True, augment=True):
+            for batch in iterate_minibatches(X_train, Y_train, 128, shuffle=True, augment=True):
                 inputs, targets = batch
                 train_err += train_fn(inputs, targets)
                 train_batches += 1

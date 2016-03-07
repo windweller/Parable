@@ -1,5 +1,6 @@
 nohup python -u tiny_cnn_resfusenet.py resnet > sunday_night_n_19_resnet_epoch_90.log &
 (LR drop at 30, 50, 75)
+batch_size: 128
 
 Using gpu device 0: GRID K520 (CNMeM is enabled)
 /home/ubuntu/.local/lib/python2.7/site-packages/theano/tensor/signal/downsample.py:5: UserWarning: downsample module has been moved to the pool module.
