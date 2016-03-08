@@ -255,16 +255,16 @@ def highway_layer(incoming, filter_size, **kwargs):
     # regular layer
     l_h = batch_norm(lasagne.layers.Conv2DLayer(incoming, num_filters=num_channels,
                                                 filter_size=filter_size,
-                                                border_mode='same',
+                                                pad='same',
                                                 W=lasagne.init.HeNormal(gain='relu'),
                                                 nonlinearity=rectify))
 
     # gate layer
     l_t = batch_norm(lasagne.layers.Conv2DLayer(incoming, num_filters=num_channels,
-                                     filter_size=filter_size,
-                                     border_mode='same',
-                                     W=lasagne.init.HeNormal(), b=lasagne.init.Constant(-4.0),
-                                     nonlinearity=T.nnet.sigmoid))
+                                                filter_size=filter_size,
+                                                pad='same',
+                                                W=lasagne.init.HeNormal(),
+                                                nonlinearity=T.nnet.sigmoid))
 
     return MultiplicativeGatingLayer(gate=l_t, input1=l_h, input2=incoming)
 
@@ -287,10 +287,10 @@ def build_highway_net(input_var):
     l = highway_layer(l, filter_size=128)  # 128 x 16 x 16 (2 highway blocks) (4 conv layers)
     l = highway_layer(l, filter_size=128)
 
-    l = highway_layer(l, filter_size=256) # 256 x 8 x 8 (1 highway blocks) (2 conv layers)
+    l = highway_layer(l, filter_size=256)  # 256 x 8 x 8 (1 highway blocks) (2 conv layers)
 
     l = highway_layer(l, filter_size=256)
-    l = highway_layer(l, filter_size=256) # 256 x 8 x 8 (2 highway blocks) (4 conv layers)
+    l = highway_layer(l, filter_size=256)  # 256 x 8 x 8 (2 highway blocks) (4 conv layers)
 
     # those are 25-layer addition (before is 19-layer config)
     # l = resfuse_block(l, projection=projection)  # 256 x 8 x 8 (2 residual blocks) (4 conv layers)
