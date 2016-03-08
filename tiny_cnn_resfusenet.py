@@ -249,24 +249,45 @@ class MultiplicativeGatingLayer(lasagne.layers.MergeLayer):
         return inputs[0] * inputs[1] + (1 - inputs[0]) * inputs[2]
 
 
-def highway_layer(incoming, filter_size=(3, 3), **kwargs):
+def highway_layer(incoming, filter_size=(3, 3), increase_dim=False, **kwargs):
     num_filters = incoming.output_shape[1]
 
     # regular layer
     l_h = batch_norm(lasagne.layers.Conv2DLayer(incoming, num_filters=num_filters,
                                                 filter_size=filter_size,
-                                                pad='same',
+                                                pad='same', stride=(1, 1),
                                                 W=lasagne.init.HeNormal(gain='relu'),
                                                 nonlinearity=rectify))
 
     # gate layer
     l_t = batch_norm(lasagne.layers.Conv2DLayer(incoming, num_filters=num_filters,
                                                 filter_size=filter_size,
-                                                pad='same',
+                                                pad='same', stride=(1, 1),
                                                 W=lasagne.init.HeNormal(),
                                                 nonlinearity=T.nnet.sigmoid))
 
     return MultiplicativeGatingLayer(gate=l_t, input1=l_h, input2=incoming)
+
+
+def inc_dim_layer(l_in, num_filters):
+    """
+    Increase the dimension of filter number
+    decrease image size
+    Args:
+        incoming:
+
+    Returns:
+
+    """
+    l = batch_norm(
+        ConvLayer(l_in, num_filters=num_filters, filter_size=(3, 3), stride=(2, 2), nonlinearity=rectify, pad='same',
+                  W=lasagne.init.HeNormal(gain='relu')))  # 128 x 16 x 16 (1 highway block) (2 conv layers)
+
+    l = batch_norm(
+        ConvLayer(l, num_filters=num_filters, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+                  W=lasagne.init.HeNormal(gain='relu')))
+
+    return l
 
 
 def build_highway_net(input_var):
@@ -282,12 +303,11 @@ def build_highway_net(input_var):
     l = highway_layer(l, num_filters=64)
     l = highway_layer(l, num_filters=64)
 
-    l = highway_layer(l, num_filters=128)  # 128 x 16 x 16 (1 highway block) (2 conv layers)
-
-    l = highway_layer(l, num_filters=128)  # 128 x 16 x 16 (2 highway blocks) (4 conv layers)
+    l = inc_dim_layer(l, num_filters=128)  # 1 dim inc block (2 conv layers)
     l = highway_layer(l, num_filters=128)
+    l = highway_layer(l, num_filters=128)  # 128 x 16 x 16 (2 highway blocks) (4 conv layers)
 
-    l = highway_layer(l, num_filters=256)  # 256 x 8 x 8 (1 highway blocks) (2 conv layers)
+    l = inc_dim_layer(l, num_filters=256)  # 256 x 8 x 8 (1 dim_inc blocks) (2 conv layers)
 
     l = highway_layer(l, num_filters=256)
     l = highway_layer(l, num_filters=256)  # 256 x 8 x 8 (2 highway blocks) (4 conv layers)
