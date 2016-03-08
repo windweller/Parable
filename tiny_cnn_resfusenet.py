@@ -249,18 +249,18 @@ class MultiplicativeGatingLayer(lasagne.layers.MergeLayer):
         return inputs[0] * inputs[1] + (1 - inputs[0]) * inputs[2]
 
 
-def highway_layer(incoming, filter_size, **kwargs):
-    num_channels = incoming.output_shape[1]
+def highway_layer(incoming, filter_size=(3, 3), **kwargs):
+    num_filters = incoming.output_shape[1]
 
     # regular layer
-    l_h = batch_norm(lasagne.layers.Conv2DLayer(incoming, num_filters=num_channels,
+    l_h = batch_norm(lasagne.layers.Conv2DLayer(incoming, num_filters=num_filters,
                                                 filter_size=filter_size,
                                                 pad='same',
                                                 W=lasagne.init.HeNormal(gain='relu'),
                                                 nonlinearity=rectify))
 
     # gate layer
-    l_t = batch_norm(lasagne.layers.Conv2DLayer(incoming, num_filters=num_channels,
+    l_t = batch_norm(lasagne.layers.Conv2DLayer(incoming, num_filters=num_filters,
                                                 filter_size=filter_size,
                                                 pad='same',
                                                 W=lasagne.init.HeNormal(),
@@ -279,18 +279,18 @@ def build_highway_net(input_var):
     l = MaxPool2DLayer(l, 2)  # 64 x 32 x 32
 
     # first stack of residual blocks, output is 64 x 32 x 32 (2 highway blocks) (4 conv layers)
-    l = highway_layer(l, filter_size=64)
-    l = highway_layer(l, filter_size=64)
+    l = highway_layer(l, num_filters=64)
+    l = highway_layer(l, num_filters=64)
 
-    l = highway_layer(l, filter_size=128)  # 128 x 16 x 16 (1 highway block) (2 conv layers)
+    l = highway_layer(l, num_filters=128)  # 128 x 16 x 16 (1 highway block) (2 conv layers)
 
-    l = highway_layer(l, filter_size=128)  # 128 x 16 x 16 (2 highway blocks) (4 conv layers)
-    l = highway_layer(l, filter_size=128)
+    l = highway_layer(l, num_filters=128)  # 128 x 16 x 16 (2 highway blocks) (4 conv layers)
+    l = highway_layer(l, num_filters=128)
 
-    l = highway_layer(l, filter_size=256)  # 256 x 8 x 8 (1 highway blocks) (2 conv layers)
+    l = highway_layer(l, num_filters=256)  # 256 x 8 x 8 (1 highway blocks) (2 conv layers)
 
-    l = highway_layer(l, filter_size=256)
-    l = highway_layer(l, filter_size=256)  # 256 x 8 x 8 (2 highway blocks) (4 conv layers)
+    l = highway_layer(l, num_filters=256)
+    l = highway_layer(l, num_filters=256)  # 256 x 8 x 8 (2 highway blocks) (4 conv layers)
 
     # those are 25-layer addition (before is 19-layer config)
     # l = resfuse_block(l, projection=projection)  # 256 x 8 x 8 (2 residual blocks) (4 conv layers)
