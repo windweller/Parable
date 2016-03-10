@@ -2,7 +2,7 @@
 
 """
 Lasagne implementation of CIFAR-10 examples from "Deep Residual Learning for Image Recognition" (http://arxiv.org/abs/1512.03385)
-Check the accompanying files for pretrained models. The 32-layer network (n=5), achieves a validation error of 7.42%, 
+Check the accompanying files for pretrained models. The 32-layer network (n=5), achieves a validation error of 7.42%,
 while the 56-layer network (n=9) achieves error of 6.75%, which is roughly equivalent to the examples in the paper.
 """
 
@@ -13,8 +13,8 @@ import time
 import string
 import random
 import pickle
-from data.image_util import *
-from logs.logs_util import *
+from parable.data.image_util import *
+from parable.logs.logs_util import *
 import numpy as np
 import theano
 import theano.tensor as T
@@ -51,13 +51,13 @@ def load_data():
     xs = []
     ys = []
     for j in range(5):
-        d = unpickle('data/cifar-10-batches-py/data_batch_' + `j + 1`)
+        d = unpickle('cifar-10-batches-py/data_batch_' + `j + 1`)
         x = d['data']
         y = d['labels']
         xs.append(x)
         ys.append(y)
 
-    d = unpickle('data/cifar-10-batches-py/test_batch')
+    d = unpickle('cifar-10-batches-py/test_batch')
     xs.append(d['data'])
     ys.append(d['labels'])
 
@@ -146,30 +146,15 @@ def residual_block(l, increase_dim=False, projection=False):
     return block
 
 
-def resfuse_super_block(l, excessive=True):
-    """
-    This puts 2 resfuse_block together,
-    and connect top to bottom (excessive connection)
-
-    if not excessive, we just return stack2
-
-    We also demand no dimension change
-    """
-    stack1 = resfuse_block(l)
-    stack2 = resfuse_block(stack1)
-
-    block = None
-    if excessive:
-        block = NonlinearityLayer(ElemwiseSumLayer([stack2, l]), nonlinearity=None)
-    else:
-        block = stack2
-
-    return block
-
-
 # create a resfuse learning block with 2 stacked residual block layer
-def resfuse_block(l):
+def resfuse_block(l, residual=1, projection=True):
     """
+    residual: a hyperparameter of how much to leak in (should be small,
+    or loss will explode: when it = 1, training loss: 2217594.131540)
+    (such effect will be even higher with deeper layers)
+
+    If we don't do projection, then the loss will just explode
+
     Every resfuse block is made of 2 resblock
     and top connect to bottom
     We simply won't allow dimension increase in a simple
@@ -179,34 +164,160 @@ def resfuse_block(l):
         increase_dim: only affect the first resnet block
         excessive: whether we try to connect more, or less
     """
+    input_num_filters = l.output_shape[1]
+
     stack1 = residual_block(l)
     stack2 = residual_block(stack1)
 
-    block = NonlinearityLayer(ElemwiseSumLayer([stack2, l]), nonlinearity=None)
+    block = None
+
+    if projection:
+        block = batch_norm(
+            ConvLayer(l, num_filters=input_num_filters, filter_size=(1, 1), stride=(1, 1), nonlinearity=None,
+                      pad='same', b=None, name="resfuse_projection"))
+        assert block.output_shape == stack2.output_shape
+        block = NonlinearityLayer(ElemwiseSumLayer([block, stack2]), nonlinearity=None)
+    else:
+        # block = NonlinearityLayer(ElemwiseSumLayer([stack2, l], coeffs=residual), nonlinearity=None)
+        block = stack2  # no summation, just regular resnet block
 
     return block
 
 
-def build_resfuse_net(input_var=None, n=5, execessive=False):
+def build_resfuse_net(input_var=None, projection=True):
+    """
+
+    Args:
+        projection: If False, we are using pure ResNet
+    Returns:
+
+    """
     # Building the network
     l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
 
-    # first layer, output is 16 x 64 x 64
-    l = batch_norm(ConvLayer(l_in, num_filters=16, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+    # first layer, output is 64 x 64 x 64
+    l = batch_norm(ConvLayer(l_in, num_filters=64, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
                              W=lasagne.init.HeNormal(gain='relu')))
 
-    # first stack of residual blocks, output is 16 x 64 x 64
-    l = resfuse_block(l)
-    # 2 resfuse blocks
-    l = resfuse_super_block(l, excessive=execessive)
+    l = MaxPool2DLayer(l, 2)  # 64 x 32 x 32
 
-    # second stack of residual blocks, output is 32 x 32 x 32
-    l = residual_block(l, increase_dim=True)
-    l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
+    # first stack of residual blocks, output is 64 x 32 x 32 (2 residual blocks) (4 conv layers)
+    l = resfuse_block(l, projection=projection)
 
-    # third stack of residual blocks, output is 64 x 16 x 16
-    l = residual_block(l, increase_dim=True)
-    l = resfuse_super_block(l, excessive=execessive)  # 4 res-blocks
+    l = residual_block(l, increase_dim=True)  # 128 x 16 x 16 (1 res block) (2 conv layers)
+
+    l = resfuse_block(l, projection=projection)  # 128 x 16 x 16 (2 residual blocks) (4 conv layers)
+
+    l = residual_block(l, increase_dim=True)  # 256 x 8 x 8 (1 residual blocks) (2 conv layers)
+
+    l = resfuse_block(l, projection=projection)  # 256 x 8 x 8 (2 residual blocks) (4 conv layers)
+
+    # those are 25-layer addition (before is 19-layer config)
+    l = resfuse_block(l, projection=projection)  # 256 x 8 x 8 (2 residual blocks) (4 conv layers)
+
+    l = residual_block(l, increase_dim=True)  # 512 x 4 x 4 (1 res block) (2 conv layers)
+
+    # (4 + 2) * 2 + 4 * 2 + 2 + 3 = 25 layers
+
+    # average pooling
+    l = GlobalPoolLayer(l)
+
+    # fully connected layer
+    network = DenseLayer(
+        l, num_units=100,
+        W=lasagne.init.HeNormal(),
+        nonlinearity=softmax)
+
+    return network
+
+
+class MultiplicativeGatingLayer(lasagne.layers.MergeLayer):
+    """
+    Generic layer that combines its 3 inputs t, h1, h2 as follows:
+    y = t * h1 + (1 - t) * h2
+    """
+
+    def __init__(self, gate, input1, input2, **kwargs):
+        incomings = [gate, input1, input2]
+        super(MultiplicativeGatingLayer, self).__init__(incomings, **kwargs)
+        assert gate.output_shape == input1.output_shape == input2.output_shape
+
+    def get_output_shape_for(self, input_shapes):
+        return input_shapes[0]
+
+    def get_output_for(self, inputs, **kwargs):
+        return inputs[0] * inputs[1] + (1 - inputs[0]) * inputs[2]
+
+
+def highway_layer(incoming, filter_size=(3, 3), increase_dim=False, **kwargs):
+    num_filters = incoming.output_shape[1]
+
+    # regular layer
+    l_h = batch_norm(lasagne.layers.Conv2DLayer(incoming, num_filters=num_filters,
+                                                filter_size=filter_size,
+                                                pad='same', stride=(1, 1),
+                                                W=lasagne.init.HeNormal(gain='relu'),
+                                                nonlinearity=rectify))
+
+    # gate layer
+    l_t = batch_norm(lasagne.layers.Conv2DLayer(incoming, num_filters=num_filters,
+                                                filter_size=filter_size,
+                                                pad='same', stride=(1, 1),
+                                                W=lasagne.init.HeNormal(),
+                                                nonlinearity=T.nnet.sigmoid))
+
+    return MultiplicativeGatingLayer(gate=l_t, input1=l_h, input2=incoming)
+
+
+def inc_dim_layer(l_in, num_filters):
+    """
+    Increase the dimension of filter number
+    decrease image size
+    Args:
+        incoming:
+
+    Returns:
+
+    """
+    l = batch_norm(
+        ConvLayer(l_in, num_filters=num_filters, filter_size=(3, 3), stride=(2, 2), nonlinearity=rectify, pad='same',
+                  W=lasagne.init.HeNormal(gain='relu')))  # 128 x 16 x 16 (1 highway block) (2 conv layers)
+
+    l = batch_norm(
+        ConvLayer(l, num_filters=num_filters, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+                  W=lasagne.init.HeNormal(gain='relu')))
+
+    return l
+
+
+def build_highway_net(input_var):
+    l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
+
+    # first layer, output is 64 x 64 x 64
+    l = batch_norm(ConvLayer(l_in, num_filters=64, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+                             W=lasagne.init.HeNormal(gain='relu')))
+
+    l = MaxPool2DLayer(l, 2)  # 64 x 32 x 32
+
+    # first stack of residual blocks, output is 64 x 32 x 32 (2 highway blocks) (4 conv layers)
+    l = highway_layer(l, num_filters=64)
+    l = highway_layer(l, num_filters=64)
+
+    l = inc_dim_layer(l, num_filters=128)  # 1 dim inc block (2 conv layers)
+    l = highway_layer(l, num_filters=128)
+    l = highway_layer(l, num_filters=128)  # 128 x 16 x 16 (2 highway blocks) (4 conv layers)
+
+    l = inc_dim_layer(l, num_filters=256)  # 256 x 8 x 8 (1 dim_inc blocks) (2 conv layers)
+
+    l = highway_layer(l, num_filters=256)
+    l = highway_layer(l, num_filters=256)  # 256 x 8 x 8 (2 highway blocks) (4 conv layers)
+
+    # those are 25-layer addition (before is 19-layer config)
+    # l = resfuse_block(l, projection=projection)  # 256 x 8 x 8 (2 residual blocks) (4 conv layers)
+    #
+    # l = residual_block(l, increase_dim=True)  # 512 x 4 x 4 (1 res block) (2 conv layers)
+
+    # 19 layers = 1 + 2 + 16 (8 * 2)
 
     # average pooling
     l = GlobalPoolLayer(l)
@@ -222,34 +333,27 @@ def build_resfuse_net(input_var=None, n=5, execessive=False):
 
 def build_cnn(input_var=None, n=5):
     # Building the network
-    # This is a ResNet-34 architecture, same as
-
     l_in = InputLayer(shape=(None, 3, 64, 64), input_var=input_var)
 
     # first layer, output is 16 x 64 x 64
-    l = batch_norm(ConvLayer(l_in, num_filters=64, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
+    l = batch_norm(ConvLayer(l_in, num_filters=16, filter_size=(3, 3), stride=(1, 1), nonlinearity=rectify, pad='same',
                              W=lasagne.init.HeNormal(gain='relu')))
 
+    # we could pool aggressively here, but we don't have to
     # CIFAR-10 doesn't aggressively pool, and ImageNet 128x128 aggressively pools
-    l = MaxPool2DLayer(l, 2) # 32 x 32
 
-    # first stack of residual blocks, output is 64 x 32 x 32
-    for _ in range(3):
+    # first stack of residual blocks, output is 16 x 64 x 64
+    for _ in range(n):
         l = residual_block(l)
 
-    # second stack of residual blocks, output is 128 x 16 x 16
+    # second stack of residual blocks, output is 32 x 32 x 32
     l = residual_block(l, increase_dim=True)
-    for _ in range(3):
+    for _ in range(1, n):
         l = residual_block(l)
 
-    # third stack of residual blocks, output is 256 x 16 x 16
+    # third stack of residual blocks, output is 64 x 16 x 16
     l = residual_block(l, increase_dim=True)
-    for _ in range(5):
-        l = residual_block(l)
-
-    # fourth stack of residual blocks, output is 512 x 8 x 8
-    l = residual_block(l, increase_dim=True)
-    for _ in range(2):
+    for _ in range(1, n):
         l = residual_block(l)
 
     # average pooling
@@ -277,7 +381,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False, augment=False
         else:
             excerpt = slice(start_idx, start_idx + batchsize)
         if augment:
-            # as in paper : 
+            # as in paper :
             # pad feature arrays with 4 pixels on each side
             # and do random cropping of 64x64
             padded = np.pad(inputs[excerpt], ((0, 0), (0, 0), (4, 4), (4, 4)), mode='constant')
@@ -307,7 +411,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
     # Unpack keyword arguments
     path = kwargs.pop('path', './cifar-10-batches-py')
     data_name = kwargs.pop('data', 'cifar-10')
-    model_type = kwargs.pop('type', 'resnet')
+    model_type = kwargs.pop('type', 'resfuse')
 
     # Check if cifar data exists
     if not os.path.exists(path):
@@ -342,14 +446,15 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
     # Create neural network model
     print("Building model and compiling functions...")
     if model_type == 'resnet':  # 'resnet' or 'resfuse' or 'resfuse-max'
-        network = build_cnn(input_var, n)
+        # network = build_cnn(input_var, n)
+        network = build_resfuse_net(input_var, projection=False)
         print("ResNet")
     elif model_type == 'resfuse':
-        network = build_resfuse_net(input_var, n, execessive=False)
+        network = build_resfuse_net(input_var, projection=True)
         print("ResFuse Net")
-    elif model_type == 'resfuse-max':
-        network = build_resfuse_net(input_var, n, execessive=True)
-        print("ResFuse Max Net")
+    elif model_type == 'highway':
+        network = build_highway_net(input_var)
+        print("Highway Net")
     else:
         raise ValueError("model type must be from resnet, resfuse, resfuse-max")
 
@@ -438,7 +543,7 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
 
             # adjust learning rate as in paper
             # 32k and 48k iterations should be roughly equivalent to 41 and 61 epochs
-            if (epoch + 1) == 55 or (epoch + 1) == 85:
+            if (epoch + 1) == 40 or (epoch + 1) == 70:
                 new_lr = sh_lr.get_value() * 0.1
                 print("New LR:" + str(new_lr))
                 sh_lr.set_value(lasagne.utils.floatX(new_lr))
@@ -446,10 +551,11 @@ def main(n=6, num_epochs=30, model=None, **kwargs):
             # decay learning rate when a plateau is hit
             # when overall validation acc becomes negative or increases smaller than 0.01
             # we decay learning rate by 0.8
-            if (val_acc / val_batches) - best_val_acc <= 0.005:
-                    new_lr = sh_lr.get_value() * 0.995
-                    print("New LR:" + str(new_lr))
-                    sh_lr.set_value(lasagne.utils.floatX(new_lr))
+
+            # if (val_acc / val_batches) - best_val_acc <= 0.005:
+            #     new_lr = sh_lr.get_value() * 0.995
+            #     print("New LR:" + str(new_lr))
+            #     sh_lr.set_value(lasagne.utils.floatX(new_lr))
 
             if (val_acc / val_batches) > best_val_acc:
                 best_val_acc = val_acc / val_batches
@@ -499,7 +605,7 @@ if __name__ == '__main__':
         print("MODEL: saved model file to load (for validation) (default: None)")
     else:
         kwargs = {}
-        epochs = 100
+        epochs = 90
 
         if len(sys.argv) > 1:
             kwargs['type'] = sys.argv[1]
