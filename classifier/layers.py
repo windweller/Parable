@@ -3,13 +3,15 @@ This file contains all layers
 that we have for our calculation
 """
 
+
 import numpy as np
 import sys
 import theano.tensor.shared_randomstreams
 import theano
 import theano.tensor as T
 from theano.tensor.signal import downsample
-from theano.tensor.nnet import conv2d, bn
+from theano.tensor.nnet import conv2d
+from collections import OrderedDict
 
 conv = "conv"
 conv_relu = "conv_relu"
@@ -95,7 +97,7 @@ def batch_norm_layer(x, gamma, beta, mean, var, bn_param):
     running_var = theano.clone(var, share_inputs=False)
 
     out = None
-    mean_var_update = {}
+    mean_var_update = OrderedDict()
 
     if mode == 'train':
         # Compute output
