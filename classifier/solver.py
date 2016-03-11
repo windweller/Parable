@@ -117,10 +117,10 @@ class Solver(object):
               training.
             """
         self.model = model
-        self.X_train = data['X_train']
-        self.y_train = data['y_train']
-        self.X_val = data['X_val']
-        self.y_val = data['y_val']
+        self.X_train = np.asarray(data['X_train'], dtype='float32')
+        self.y_train = np.asarray(data['y_train'], dtype='float32')
+        self.X_val = np.asarray(data['X_val'], dtype='float32')
+        self.y_val = np.asarray(data['y_val'], dtype='float32')
         self.X = symbolic_X  # data, presented as rasterized images
         self.y = symbolic_y  # labels, presented as 1D vector of [int] labels
 
