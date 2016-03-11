@@ -180,7 +180,7 @@ def spatial_batch_norm_layer(x, x_shape, gamma, beta, mean, var, bn_param):
         return out
 
 
-def softmax_layer(x, y):
+def softmax_layer(x):
     """
     Computes the loss and gradient for softmax classification.
 
@@ -195,8 +195,8 @@ def softmax_layer(x, y):
     - dx: Gradient of the loss with respect to x
     """
     probs = T.nnet.softmax(x)
-    loss = -T.mean(T.log(probs)[T.arange(y.shape[0]), y])
-    return loss
+    # loss = -T.mean(T.log(probs)[T.arange(y.shape[0]), y])
+    return probs
 
 
 def conv_layer(x, w, conv_param):
@@ -266,16 +266,6 @@ def avg_pooling_layer(x, pool_param):
     pool_out = downsample.max_pool_2d(x, (pool_width, pool_height), ignore_border=True, mode='average_exc_pad')
     return pool_out
 
-
-def resnet_block_layer():
-    """
-    Forms a resnet block
-    2 conv layers, with beginning connect to bottom
-
-    Returns:
-    """
-
-
 class ConvNet(object):
     """
     Very similar to CS231N's creation
@@ -334,7 +324,7 @@ class ConvNet(object):
         for k, v in self.params.iteritems():
             self.params[k] = v.astype(self.dtype)
 
-    def loss(self, X, y=None):
+    def loss(self, X, y=None, final_loss=True):
         """
         This processes each stored layer and build up
         the computational graph
@@ -344,6 +334,9 @@ class ConvNet(object):
 
         - X: symbolic expression T.matrix('x')
         - y: symbolic expression T.ivector('y')
+
+        -final_loss: if True, we compute the final loss
+                     if False, we can compute final loss outside
 
         Returns:
         - loss: symbolic expression, we no longer return grad
@@ -418,12 +411,17 @@ class ConvNet(object):
                 print "unknown layer: " + label
                 sys.exit(0)
 
-        if y is None:
-            return out  # those are the final scores (we don't need to pass into softmax)
+        # if y is None:
+        #     return out  # those are the final scores (we don't need to pass into softmax)
 
         # an if in case we use other final algorithm like SVM
         if self.layer_label[-1] is affine_softmax:
-            out = softmax_layer(out, y)  # this gets us the final loss
+            out = softmax_layer(out)  # this gets us the softmax result
+            # probabilities (or test predictions)
+
+        # we need to pass into cross_entropy loss outside!!
+        if final_loss and y is not None:
+            out = T.nnet.categorical_crossentropy(out, y)  # compare test predictions with truth labels
 
         return out
 
@@ -637,19 +635,6 @@ class ConvNet(object):
         self.add_batch_layer(number_filter)
         self.layer_label.append(conv_batch)
         self.i += 1
-
-    def add_res_block(self):
-        """
-        Res_block is composed of 2 conv layers
-        of same size
-        """
-        input_depth_dim = self.prev_depth
-
-    def add_jump_connect_res_block(self):
-        """
-        This is a custom resnet block.
-        """
-        pass
 
     def add_pool_layer(self, size, mode='max'):
         """
