@@ -89,7 +89,7 @@ def batch_norm_layer(x, gamma, beta, mean, var, bn_param):
     eps = bn_param.get('eps', 1e-5)
     momentum = bn_param.get('momentum', 0.9)
 
-    batch_mean = T.mean(x, axis=0)
+    batch_mean = T.mean(x, axis=0, dtype='float32')
     batch_var = T.var(x, axis=0)
 
     # so symbolic computation can carry on
@@ -423,7 +423,7 @@ class ConvNet(object):
 
         # we need to pass into cross_entropy loss outside!!
         if final_loss and y is not None:
-            out = T.nnet.categorical_crossentropy(out, y)  # compare test predictions with truth labels
+            out = -T.mean(T.log(out)[T.arange(y.shape[0]), y])  # compare test predictions with truth labels
 
         return out
 
