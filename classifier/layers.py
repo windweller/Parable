@@ -89,9 +89,9 @@ def batch_norm_layer(x, gamma, beta, mean, var, bn_param):
     eps = bn_param.get('eps', 1e-5)
     momentum = bn_param.get('momentum', 0.9)
 
-    batch_mean = T.mean(x, axis=0)
+    batch_mean = T.mean(x, axis=0, dtype='float32')
     batch_var = T.var(x, axis=0)
-
+    
     # so symbolic computation can carry on
     running_mean = theano.clone(mean, share_inputs=False)
     running_var = theano.clone(var, share_inputs=False)
@@ -109,7 +109,7 @@ def batch_norm_layer(x, gamma, beta, mean, var, bn_param):
         # Update running average of mean
         running_mean *= momentum
         running_mean += (1 - momentum) * batch_mean
-
+        
         # Update running average of variance
         running_var *= momentum
         running_var += (1 - momentum) * batch_var
@@ -123,8 +123,8 @@ def batch_norm_layer(x, gamma, beta, mean, var, bn_param):
 
     # store update in the update rule
     # it gets updated on the outside
-    mean_var_update[mean] = running_mean
-    mean_var_update[var] = running_var
+    mean_var_update[mean] = T.cast(running_mean, dtype='float32')
+    mean_var_update[var] = T.cast(running_var, dtype='float32')
 
     if mode == 'train':
         return out, mean_var_update
