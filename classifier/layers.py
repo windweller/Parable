@@ -276,7 +276,7 @@ class ConvNet(object):
     def __init__(self, input_dim=(1, 32, 32),
                  batch_size=-100,
                  weight_scale=1e-3, reg=0.001,
-                 dtype=theano.config.floatX):
+                 dtype='float32'):
         """
         Initialize a new network. We create and store params here,
         and distribute on layers
