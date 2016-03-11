@@ -145,6 +145,9 @@ class Solver(object):
             raise ValueError('Invalid update_rule "%s"' % self.update_rule)
         self.update_rule = getattr(optim, self.update_rule)
 
+        # we don't know if _reset() is resetting everything
+        self._reset()
+
         # constructing train_fn and valid_fn (also used for test_fn)
         self.train_loss = self.model.loss(self.X, self.y, final_loss=True)
         self.updates = []
@@ -174,9 +177,6 @@ class Solver(object):
                                dtype=theano.config.floatX)
 
         self.val_fn = theano.function([self.X, self.y], [self.test_scores, self.test_loss, self.test_acc])
-
-        # we don't know if _reset() is resetting everything
-        self._reset()
 
     def _reset(self):
         """
