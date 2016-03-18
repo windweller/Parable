@@ -118,9 +118,9 @@ class Solver(object):
             """
         self.model = model
         self.X_train = np.asarray(data['X_train'], dtype='float32')
-        self.y_train = np.asarray(data['y_train'], dtype='float32')
+        self.y_train = np.asarray(data['y_train'], dtype='int32')
         self.X_val = np.asarray(data['X_val'], dtype='float32')
-        self.y_val = np.asarray(data['y_val'], dtype='float32')
+        self.y_val = np.asarray(data['y_val'], dtype='int32')
         self.X = symbolic_X  # data, presented as rasterized images
         self.y = symbolic_y  # labels, presented as 1D vector of [int] labels
 
@@ -174,7 +174,7 @@ class Solver(object):
 
         self.test_loss = self.test_loss.mean()
         self.test_acc = T.mean(T.eq(T.argmax(self.test_scores, axis=1), self.y),
-                               dtype=theano.config.floatX)
+                               dtype='float32')
 
         self.val_fn = theano.function([self.X, self.y], [self.test_scores, self.test_loss, self.test_acc])
 
