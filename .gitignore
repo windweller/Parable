@@ -1,8 +1,13 @@
 data/tiny-imagenet-100-A/
+data/GoogleNews-vectors-negative300.bin.gz
+
+# IntelliJ
+.name
+*.xml
+*.iml
 
 # Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
+__pycache__*.py[cod]
 *$py.class
 
 # C extensions
