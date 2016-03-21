@@ -161,8 +161,8 @@ class Solver(object):
             self.updates.append((self.model.params[p], next_w))  # we store those updates
             self.optim_configs[p] = next_config
 
-            # ADD OTHER STUFF TO UPDATES list (such as BATCH NORM's updates)
-            self.updates.extend(self.model.updates)
+        # ADD OTHER STUFF TO UPDATES list (such as BATCH NORM's updates)
+        self.updates.extend(self.model.updates)
 
         self.train_fn = theano.function([self.X, self.y], self.train_loss, updates=self.updates)
 
