@@ -169,7 +169,7 @@ class Solver(object):
         # However, our validation function follows a different style:
         # We take index slice as input, not actual batch as input
 
-        self.test_probs = self.model.loss(self.X, final_loss=False)  # this is the softmax probability
+        self.test_scores = self.model.loss(self.X, final_loss=False)  # this is the softmax probability
         self.test_loss = T.nnet.categorical_crossentropy(self.test_scores, self.y)  # loss
 
         self.test_loss = self.test_loss.mean()
@@ -225,10 +225,12 @@ class Solver(object):
         # We create a Theano function
         # this gets the loss and run parameter update!
 
-        X_batch_shared = wrap_shared_var(X_batch, 'X_batch' + str(t), borrow=True)
-        y_batch_shared = wrap_shared_var(y_batch, 'y_batch' + str(t), borrow=True)
+        # X_batch_shared = wrap_shared_var(X_batch, 'X_batch' + str(t), borrow=True)
+        # y_batch_shared = wrap_shared_var(y_batch, 'y_batch' + str(t), borrow=True)
 
-        self.loss_history.append(self.train_fn(X_batch_shared, y_batch_shared))
+        num_loss = self.train_fn(X_batch, y_batch)
+
+        self.loss_history.append(num_loss)
 
     def check_accuracy(self, X, y, num_samples=None, batch_size=100):
         """
@@ -264,16 +266,16 @@ class Solver(object):
         if N % batch_size != 0:
             num_batches += 1
 
-        X_shared = wrap_shared_var(X, 'X_check_accuracy', borrow=True)
-        y_shared = wrap_shared_var(y, 'y_check_accuracy', borrow=True)
+        # X_shared = wrap_shared_var(X, 'X_check_accuracy', borrow=True)
+        # y_shared = wrap_shared_var(y, 'y_check_accuracy', borrow=True)
 
         # Compute test loss
         test_loss, test_acc = None, None
         for i in xrange(num_batches):
             start = i * batch_size
             end = (i + 1) * batch_size
-            _, test_loss, test_acc = self.val_fn(X_shared[start:end],
-                                                 y_shared[start:end])  # self.model.loss(X[start:end])
+            _, test_loss, test_acc = self.val_fn(X[start:end],
+                                                 y[start:end])  # self.model.loss(X[start:end])
 
         return test_loss, test_acc
 
@@ -281,7 +283,6 @@ class Solver(object):
         """
         Run optimization to train the model.
         """
-
         num_train = self.X_train.shape[0]
         iterations_per_epoch = max(num_train / self.batch_size, 1)
         num_iterations = self.num_epochs * iterations_per_epoch
@@ -308,8 +309,8 @@ class Solver(object):
             last_it = (t == num_iterations + 1)
 
             if first_it or last_it or epoch_end:
-                train_acc = self.check_accuracy(self.X_train, self.y_train, num_samples=1000)
-                val_acc = self.check_accuracy(self.X_val, self.y_val)
+                _, train_acc = self.check_accuracy(self.X_train, self.y_train, batch_size=self.batch_size) # , num_samples=1000
+                val_loss, val_acc = self.check_accuracy(self.X_val, self.y_val, batch_size=self.batch_size)
                 self.train_acc_history.append(train_acc)
                 self.val_acc_history.append(val_acc)
 
