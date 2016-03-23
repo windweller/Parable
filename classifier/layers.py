@@ -424,7 +424,7 @@ class ConvNet(object):
         # we need to pass into cross_entropy loss outside!!
         if final_loss and y is not None:
             out = -T.mean(T.log(out)[T.arange(y.shape[0]), y])  # compare test predictions with truth labels
-            # out = -T.mean(T.nnet.categorical_crossentropy(out, y))
+            # out = T.mean(T.nnet.categorical_crossentropy(out, y))
 
         return out
 
