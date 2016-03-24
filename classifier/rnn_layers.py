@@ -33,12 +33,72 @@ def rnn_step_forward(x, prev_h, Wx, Wh, b):
     # y = W_hy * h_t
 
     # store this for derivative
-    next_h = np.tanh(np.dot(prev_h, Wh) + np.dot(x, Wx) + b)
+    next_h = T.tanh(T.dot(prev_h, Wh) + T.dot(x, Wx) + b)
 
-    cache['hs_t'] = next_h
-    cache['prev_hs'] = prev_h
-    cache['x'] = x
-    cache['Wh'] = Wh  # Whh (weight of hidden state)
-    cache['Wx'] = Wx
+    return next_h
 
-    return next_h, cache
+
+def lstm_step_forward(x, prev_h, prev_c, Wx, Wh, b, H):
+    """
+    Forward pass for a single timestep of an LSTM.
+
+    The input data has dimension D, the hidden state has dimension H, and we use
+    a minibatch size of N.
+
+    Inputs:
+    - x: Input data, of shape (N, D)
+    - prev_h: Previous hidden state, of shape (N, H)
+    - prev_c: previous cell state, of shape (N, H)
+    - Wx: Input-to-hidden weights, of shape (D, 4H)
+    - Wh: Hidden-to-hidden weights, of shape (H, 4H)
+    - b: Biases, of shape (4H,)
+    - H: H = prev_c.shape[1] (we can't get H anymore, must be passed in)
+
+    Returns a tuple of:
+    - next_h: Next hidden state, of shape (N, H)
+    - next_c: Next cell state, of shape (N, H)
+    - cache: Tuple of values needed for backward pass.
+    """
+
+    # H = prev_c.shape[1]
+
+    a = T.dot(x, Wx) + T.dot(prev_h, Wh) + b
+    # np.dot(x, Wx) = (N, 4H) -- be extra careful that hidden state (H, H) might be inverted
+    # output: (N, 4H)
+    a_i = a[:, 0:H]
+    a_f = a[:, H:H * 2]
+    a_o = a[:, H * 2:H * 3]
+    a_g = a[:, H * 3: H * 4]
+
+    i = T.nnet.sigmoid(a_i)
+    f = T.nnet.sigmoid(a_f)
+    o = T.nnet.sigmoid(a_o)
+    g = T.tanh(a_g)
+
+    next_c = f * prev_c + i * g
+    next_h = o * T.tanh(next_c)
+
+    return next_h, next_c
+
+
+def temporal_affine_forward(x, w, b):
+    """
+    Forward pass for a temporal affine layer. The input is a set of D-dimensional
+    vectors arranged into a minibatch of N timeseries, each of length T. We use
+    an affine function to transform each of those vectors into a new vector of
+    dimension M.
+
+    Inputs:
+    - x: Input data of shape (N, T, D)
+    - w: Weights of shape (D, M)
+    - b: Biases of shape (M,)
+
+    Returns a tuple of:
+    - out: Output data of shape (N, T, M)
+    - cache: Values needed for the backward pass
+    """
+    N, T, D = x.shape
+    M = b.shape[0]
+    out = x.reshape(N * T, D).dot(w).reshape(N, T, M) + b
+    cache = x, w, b, out
+    return out, cache
