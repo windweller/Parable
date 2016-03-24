@@ -1,5 +1,6 @@
 data/tiny-imagenet-100-A/
 data/GoogleNews-vectors-negative300.bin.gz
+data/snli_1.0
 
 # IntelliJ
 .name
