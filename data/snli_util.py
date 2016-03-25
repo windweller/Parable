@@ -7,35 +7,39 @@ import os, json
 import numpy as np
 import unicodedata
 import re
+from gensim.models.word2vec import Word2Vec
 
 label_idx_map = {'-': 0, 'entailment': 1, 'neutral': 2, 'contradiction': 3}
 
-word_idx_map = {'<NULL>': 0, '<UNK>': 1, '<START>': 2, '<END>': 3}
+word_idx_map = {'<NULL>': 0, '<UNK>': 1, '<END>': 2}
 
-idx_word_map = ['<NULL>', '<UNK>', '<START>', '<END>']
+idx_word_map = ['<NULL>', '<UNK>', '<END>']
 
-word_count_map = {}
+# we replace rare words with <UNK>, which shares the same vector
+word_count_map = {}  # length: 34044
+
+W_embed = None
 
 
-def load_dataset(base_dir, generate_word_dict):
+def load_dataset(base_dir):
     data = {}
 
     train_file = os.path.join(base_dir, 'snli_1.0_train.jsonl')
 
-    get_data('train', train_file, data, generate_word_dict)
+    get_data('train', train_file, data)
 
     dev_file = os.path.join(base_dir, 'snli_1.0_dev.jsonl')
 
-    get_data('dev', dev_file, data, generate_word_dict)
+    get_data('dev', dev_file, data)
 
     test_file = os.path.join(base_dir, 'snli_1.0_test.jsonl')
 
-    get_data('test', test_file, data, generate_word_dict)
+    get_data('test', test_file, data)
 
     return data
 
 
-def get_data(category, file_path, data, generate_word_dict=False):
+def get_data(category, file_path, data):
     """
     Args:
         category: 'train', 'dev', or 'test'
@@ -50,16 +54,29 @@ def get_data(category, file_path, data, generate_word_dict=False):
             if json_obj['gold_label'] == '-':  # skipping non-label
                 continue
             pair = {}
-            pair['pairID'] = json_obj['pairID']
             pair['sentence1'] = clean_str(json_obj['sentence1'])
             pair['sentence2'] = clean_str(json_obj['sentence2'])
-            if generate_word_dict:
-                sentence_array = pair['sentence1'].split()
-                for word in sentence_array:
-                    if word not in word_idx_map:
-                        word_idx_map[word] = len(word_idx_map)
-            # pair['sentence1_parse'] = json_obj['sentence1_parse']
-            # pair['sentence2_parse'] = json_obj['sentence2_parse']
+
+            sentence1_array = pair['sentence1'].split()
+            sentence2_array = pair['sentence2'].split()
+
+            for word in sentence1_array:
+                if word not in word_idx_map:
+                    word_idx_map[word] = len(word_idx_map)
+                    idx_word_map.append(word)
+                if word not in word_count_map:
+                    word_count_map[word] = 0
+                else:
+                    word_count_map[word] += 1
+
+            for word in sentence2_array:
+                if word not in word_idx_map:
+                    word_idx_map[word] = len(word_idx_map)
+                    idx_word_map.append(word)
+                if word not in word_count_map:
+                    word_count_map[word] = 0
+                else:
+                    word_count_map[word] += 1
 
             data['y_' + category].append(int(label_idx_map[json_obj['gold_label']]))
             data[category + '_sentences'].append(pair)
@@ -67,10 +84,68 @@ def get_data(category, file_path, data, generate_word_dict=False):
     data['y_' + category] = np.asarray(data['y_' + category], dtype='int32')
 
 
+def convert_words_to_idx(data_X):
+    """
+    We convert word sentence into idx sentence,
+    and if a word is not in word2vec: "rare", we already have a randomized word embedding
+
+    Args:
+        data_X: the 'train_sentences', 'dev_sentences', 'test_sentences'
+
+    Returns:
+    """
+    for pair in data_X:
+        sentence1_idx = []
+        sentence2_idx = []
+        for word in pair['sentence1']:
+            sentence1_idx.append(word_idx_map[word])
+
+        for word in pair['sentence2']:
+            sentence2_idx.append(word_idx_map[word])
+
+        pair['sentence1'] = sentence1_idx
+        pair['sentence2'] = sentence2_idx
+
+
+def compress_word2vec(W_embed, word2vec):
+    """
+    We compress word2vec's 1.5G file with
+    only the words we have
+
+    update W_embed
+
+    word2vec: the word2vec model we loaded
+
+    Returns:
+    """
+
+
+def print_stats(threshold=1, display=20):
+    """
+    print out how many words are equal to or below threshold
+
+    In SNLI we have 12534 rare words (that appeared only once) (almost 33% of the corpus)
+
+    display: how many of such words we want to display
+    """
+    rare_words = []
+
+    for k, v in word_count_map.iteritems():
+        if v <= threshold:
+            rare_words.append(k)
+
+    print "total number of rare words are: ", len(rare_words)
+
+    for i in xrange(display):
+        print rare_words[i]
+
+
 def clean_str(string, TREC=False):
     """
     Tokenization/string cleaning for all datasets except for SST.
     Every dataset is lower cased except for TREC
+
+    (this removes "." period as well)
     """
     string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
     string = re.sub(r"\'s", " \'s", string)
@@ -90,4 +165,21 @@ def clean_str(string, TREC=False):
 
 if __name__ == '__main__':
     pwd = os.path.dirname(os.path.realpath(__file__))
-    data = load_dataset(pwd + "/snli_1.0", generate_word_dict=True)
+    data = load_dataset(pwd + "/snli_1.0")
+
+    # plan: we map words that appears less than 5 times to a special token <UNK>
+    # words that are frequent, more than 5 times, and not in word2vec,
+    # we add a random vector to it.
+
+    # initialize all embeddings randomly, then we swap out
+    # words that appear in Word2Vec
+
+    W_embed = np.random.randn(len(idx_word_map), 300)
+
+    model = Word2Vec.load_word2vec_format()
+
+    convert_words_to_idx(data['train_sentences'])
+    convert_words_to_idx(data['dev_sentences'])
+    convert_words_to_idx(data['test_sentences'])
+
+    compress_word2vec(W_embed, model)
