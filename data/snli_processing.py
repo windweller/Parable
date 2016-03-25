@@ -8,6 +8,7 @@ import numpy as np
 import unicodedata
 import re
 from gensim.models.word2vec import Word2Vec
+import time
 
 label_idx_map = {'-': 0, 'entailment': 1, 'neutral': 2, 'contradiction': 3}
 
@@ -100,14 +101,18 @@ def convert_words_to_idx(data_X):
         for word in pair['sentence1']:
             sentence1_idx.append(word_idx_map[word])
 
+        sentence1_idx.append(2)  # append <END> token to it
+
         for word in pair['sentence2']:
             sentence2_idx.append(word_idx_map[word])
+
+        sentence2_idx.append(2)  # append <END> token to it
 
         pair['sentence1'] = sentence1_idx
         pair['sentence2'] = sentence2_idx
 
 
-def compress_word2vec(W_embed, word2vec):
+def compress_word2vec(W_embed, model):
     """
     We compress word2vec's 1.5G file with
     only the words we have
@@ -118,6 +123,14 @@ def compress_word2vec(W_embed, word2vec):
 
     Returns:
     """
+
+    num_words_not_in = 0
+
+    for i, word in enumerate(idx_word_map):
+        if word in model:
+            W_embed[i, :] = model[word]
+        else:
+            num_words_not_in += 1
 
 
 def print_stats(threshold=1, display=20):
@@ -164,8 +177,17 @@ def clean_str(string, TREC=False):
 
 
 if __name__ == '__main__':
+    begin = time.time()
+
     pwd = os.path.dirname(os.path.realpath(__file__))
+
+    model = Word2Vec.load_word2vec_format(pwd + '/GoogleNews-vectors-negative300.bin.gz', binary=True)
+
+    print "word2vec loaded..."
+
     data = load_dataset(pwd + "/snli_1.0")
+
+    print "data loaded..."
 
     # plan: we map words that appears less than 5 times to a special token <UNK>
     # words that are frequent, more than 5 times, and not in word2vec,
@@ -176,10 +198,16 @@ if __name__ == '__main__':
 
     W_embed = np.random.randn(len(idx_word_map), 300)
 
-    model = Word2Vec.load_word2vec_format()
-
     convert_words_to_idx(data['train_sentences'])
     convert_words_to_idx(data['dev_sentences'])
     convert_words_to_idx(data['test_sentences'])
 
     compress_word2vec(W_embed, model)
+
+    np.savez_compressed(pwd + "/snli_processed", W_embed=W_embed,
+                        word_idx_map=word_idx_map, idx_word_map=idx_word_map,
+                        data=data)
+
+    end = time.time()
+
+    print "time spent: ", (begin - end), "s"
