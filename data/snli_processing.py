@@ -137,6 +137,8 @@ def compress_word2vec(W_embed, model):
         else:
             num_words_not_in += 1
 
+    print "words not in word2vec: ", num_words_not_in
+
 
 def print_stats(threshold=1, display=20):
     """
@@ -153,6 +155,7 @@ def print_stats(threshold=1, display=20):
             rare_words.append(k)
 
     print "total number of rare words are: ", len(rare_words)
+    # words not in word2vec:  6636
 
     for i in xrange(display):
         print rare_words[i]
