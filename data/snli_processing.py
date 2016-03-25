@@ -85,6 +85,10 @@ def get_data(category, file_path, data):
     data['y_' + category] = np.asarray(data['y_' + category], dtype='int32')
 
 
+def decode(unicode_str):
+    return unicodedata.normalize('NFKD', unicode_str).encode('ascii', 'ignore')
+
+
 def convert_words_to_idx(data_X):
     """
     We convert word sentence into idx sentence,
@@ -98,12 +102,13 @@ def convert_words_to_idx(data_X):
     for pair in data_X:
         sentence1_idx = []
         sentence2_idx = []
-        for word in pair['sentence1']:
+
+        for word in decode(pair['sentence1']).split():
             sentence1_idx.append(word_idx_map[word])
 
         sentence1_idx.append(2)  # append <END> token to it
 
-        for word in pair['sentence2']:
+        for word in decode(pair['sentence2']).split():
             sentence2_idx.append(word_idx_map[word])
 
         sentence2_idx.append(2)  # append <END> token to it
@@ -210,4 +215,5 @@ if __name__ == '__main__':
 
     end = time.time()
 
-    print "time spent: ", (begin - end), "s"
+    print "time spent: ", (end - begin), "s"
+    # 271.000173807 s
