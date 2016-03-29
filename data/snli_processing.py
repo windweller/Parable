@@ -216,7 +216,12 @@ if __name__ == '__main__':
 
     np.savez_compressed(pwd + "/snli_processed", W_embed=W_embed,
                         word_idx_map=word_idx_map, idx_word_map=idx_word_map,
-                        data=data)
+                        train_sentences=data['train_sentences'],
+                        dev_sentences=data['dev_sentences'],
+                        test_sentences=data['test_sentences'],
+                        y_train=data['y_train'],
+                        y_dev=data['y_dev'],
+                        y_test=data['y_test'])
 
     end = time.time()
 
