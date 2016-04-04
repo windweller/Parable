@@ -208,7 +208,7 @@ if __name__ == '__main__':
 
     W_embed /= 100
 
-    convert_words_to_idx(data['train_sentences'])
+    convert_words_to_idx(data['train_sentencegits'])
     convert_words_to_idx(data['dev_sentences'])
     convert_words_to_idx(data['test_sentences'])
 
