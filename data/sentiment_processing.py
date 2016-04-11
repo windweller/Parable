@@ -58,14 +58,14 @@ def load_dataset(base_dir, dev_portion=0.05, test_portion=0.05):
     # add up to 5331
 
     # split based on proportion
-    data['X_val'] = pos_sens['sentences'][:val_cut_off] + neg_sens['sentences'][:val_cut_off]
+    data['X_val'] = np.asarray(pos_sens['sentences'][:val_cut_off] + neg_sens['sentences'][:val_cut_off], dtype='int32')
     data['y_val'] = np.append(pos_sens['y'][:val_cut_off], neg_sens['y'][:val_cut_off])
 
-    data['X_test'] = pos_sens['sentences'][val_cut_off:test_cut_off] + neg_sens['sentences'][val_cut_off:test_cut_off]
+    data['X_test'] = np.asarray(pos_sens['sentences'][val_cut_off:test_cut_off] + neg_sens['sentences'][val_cut_off:test_cut_off], dtype='int32')
     data['y_test'] = np.append(pos_sens['y'][val_cut_off:test_cut_off], neg_sens['y'][val_cut_off:test_cut_off])
 
     # the rest, starting at test_cut_off, is all training data
-    data['X_train'] = pos_sens['sentences'][test_cut_off:] + neg_sens['sentences'][test_cut_off:]
+    data['X_train'] = np.asarray(pos_sens['sentences'][test_cut_off:] + neg_sens['sentences'][test_cut_off:], dtype='int32')
     data['y_train'] = np.append(pos_sens['y'][test_cut_off:], neg_sens['y'][test_cut_off:])
 
     return data
@@ -219,14 +219,16 @@ if __name__ == '__main__':
     # initialize all embeddings randomly, then we swap out
     # words that appear in Word2Vec (unseen words are initialized randomly)
 
-    W_embed = np.random.randn(len(idx_word_map), 300)
+    W_embed = np.asarray(np.random.randn(len(idx_word_map), 300), dtype='float32')
 
     W_embed /= 100
 
     compress_word2vec(W_embed, model)
 
-    np.savez_compressed(pwd + "/rt_sentiment_processed", W_embed=W_embed,
-                        word_idx_map=word_idx_map, idx_word_map=idx_word_map,
+    with open(pwd + '/sentiment_vocab.json', 'w') as outfile:
+        json.dump({idx_word_map:idx_word_map, word_idx_map:word_idx_map}, outfile)
+
+    np.savez_compressed(pwd + "/rt_sentiment_data", W_embed=W_embed,
                         X_train=data['X_train'],
                         X_val=data['X_val'],
                         X_test=data['X_test'],

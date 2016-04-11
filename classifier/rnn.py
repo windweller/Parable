@@ -2,9 +2,11 @@ from rnn_layers import *
 import theano
 import numpy as np
 
-class GeneralRNN(object):
+class RNNClassifier(object):
     """
-    A RNN encoder-decoder framework that can use LSTM or GRU cell type
+    A RNN classifier framework that can use LSTM or GRU cell type
+
+    (Just an encoder, with a softmax at the end to classify result into a category)
 
     RNN encoder takes an input vector
 
@@ -288,3 +290,15 @@ class GeneralRNN(object):
         #                             END OF YOUR CODE                             #
         ############################################################################
         return captions
+
+class RNNEncoderDecoder(object):
+    """
+    A RNN Encoder-Decoder Framework
+    """
+
+class StochasticRNN(object):
+    """
+    RNN that can encode arbitrarily long sequence
+    (thousands of time steps)
+    (best for QA, Paragraph chunking tasks)
+    """

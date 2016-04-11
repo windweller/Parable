@@ -214,8 +214,13 @@ if __name__ == '__main__':
 
     compress_word2vec(W_embed, model)
 
+    with open(pwd + '/snli_vocab.json', 'w') as outfile:
+        json.dump({idx_word_map: idx_word_map, word_idx_map: word_idx_map}, outfile)
+
+    # TODO: this is not gonna work. Numpy Compress can't solve
+    # TODO: sentence pairing problem (must break them up somehow)
+
     np.savez_compressed(pwd + "/snli_processed", W_embed=W_embed,
-                        word_idx_map=word_idx_map, idx_word_map=idx_word_map,
                         train_sentences=data['train_sentences'],
                         dev_sentences=data['dev_sentences'],
                         test_sentences=data['test_sentences'],
