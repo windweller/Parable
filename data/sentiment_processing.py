@@ -131,9 +131,9 @@ def convert_words_to_idx(data_X):
 
             sen_idx.append(2)  # append <END> token to it
 
-        converted.append(sen_idx)
+        converted.append(np.asarray(sen_idx, dtype='int32'))
 
-    return converted
+    return np.asarray(converted, dtype='int32')
 
 
 def compress_word2vec(W_embed, model):
@@ -208,13 +208,13 @@ if __name__ == '__main__':
 
     pwd = os.path.dirname(os.path.realpath(__file__))
 
-    model = Word2Vec.load_word2vec_format(pwd + '/GoogleNews-vectors-negative300.bin.gz', binary=True)
-
-    print "word2vec loaded..."
-
     data = load_dataset(pwd)
 
     print "data loaded..."
+
+    model = Word2Vec.load_word2vec_format(pwd + '/GoogleNews-vectors-negative300.bin.gz', binary=True)
+
+    print "word2vec loaded..."
 
     # initialize all embeddings randomly, then we swap out
     # words that appear in Word2Vec (unseen words are initialized randomly)
