@@ -30,7 +30,7 @@ word_count_map = {}  # length: 18768
 
 W_embed = None
 
-max_sen_length = 0
+max_sen_length = 0  # 56
 
 
 def load_dataset(base_dir, dev_portion=0.05, test_portion=0.05):
@@ -215,6 +215,9 @@ if __name__ == '__main__':
 
     data = load_dataset(pwd)
 
+    with open(pwd + '/sentiment_vocab.json', 'w') as outfile:
+        json.dump({'idx_word_map':idx_word_map, 'word_idx_map':word_idx_map}, outfile)
+
     print "data loaded..."
 
     print "longest sentence length: ", max_sen_length
@@ -232,15 +235,12 @@ if __name__ == '__main__':
 
     compress_word2vec(W_embed, model)
 
-    with open(pwd + '/sentiment_vocab.json', 'w') as outfile:
-        json.dump({idx_word_map:idx_word_map, word_idx_map:word_idx_map}, outfile)
-
     np.savez_compressed(pwd + "/rt_sentiment_data", W_embed=W_embed,
                         X_train=data['X_train'],
                         X_val=data['X_val'],
                         X_test=data['X_test'],
                         y_train=data['y_train'],
-                        y_dev=data['y_dev'],
+                        y_val=data['y_val'],
                         y_test=data['y_test'])
 
     end = time.time()
