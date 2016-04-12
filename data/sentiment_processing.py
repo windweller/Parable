@@ -30,6 +30,8 @@ word_count_map = {}  # length: 18768
 
 W_embed = None
 
+max_sen_length = 0
+
 
 def load_dataset(base_dir, dev_portion=0.05, test_portion=0.05):
     data = {}
@@ -58,14 +60,14 @@ def load_dataset(base_dir, dev_portion=0.05, test_portion=0.05):
     # add up to 5331
 
     # split based on proportion
-    data['X_val'] = np.asarray(pos_sens['sentences'][:val_cut_off] + neg_sens['sentences'][:val_cut_off], dtype='int32')
+    data['X_val'] = np.append(pos_sens['sentences'][:val_cut_off], neg_sens['sentences'][:val_cut_off])
     data['y_val'] = np.append(pos_sens['y'][:val_cut_off], neg_sens['y'][:val_cut_off])
 
-    data['X_test'] = np.asarray(pos_sens['sentences'][val_cut_off:test_cut_off] + neg_sens['sentences'][val_cut_off:test_cut_off], dtype='int32')
+    data['X_test'] = np.append(pos_sens['sentences'][val_cut_off:test_cut_off], neg_sens['sentences'][val_cut_off:test_cut_off])
     data['y_test'] = np.append(pos_sens['y'][val_cut_off:test_cut_off], neg_sens['y'][val_cut_off:test_cut_off])
 
     # the rest, starting at test_cut_off, is all training data
-    data['X_train'] = np.asarray(pos_sens['sentences'][test_cut_off:] + neg_sens['sentences'][test_cut_off:], dtype='int32')
+    data['X_train'] = np.append(pos_sens['sentences'][test_cut_off:], neg_sens['sentences'][test_cut_off:])
     data['y_train'] = np.append(pos_sens['y'][test_cut_off:], neg_sens['y'][test_cut_off:])
 
     return data
@@ -78,6 +80,8 @@ def get_data(category, file_path):
         data: pass in the dictionary, and we fill it up inside this function
     """
 
+    global max_sen_length
+
     data = {}
 
     data['sentences'] = []
@@ -89,6 +93,9 @@ def get_data(category, file_path):
             rev.append(line.strip())
             cleaned_sen = clean_str(" ".join(rev)).strip().split()
             data['sentences'].append(cleaned_sen)
+
+            if max_sen_length < len(cleaned_sen):
+                max_sen_length = len(cleaned_sen)
 
             for word in cleaned_sen:
                 if word not in word_idx_map:
@@ -116,24 +123,22 @@ def convert_words_to_idx(data_X):
     We convert word sentence into idx sentence,
     and if a word is not in word2vec: "rare", we already have a randomized word embedding
 
-    Args:
-        data_X: the 'train_sentences', 'dev_sentences', 'test_sentences'
-
     Returns:
     """
-    converted = []
+    sen_num = len(data_X)
+    converted = np.zeros((sen_num, max_sen_length), dtype='int32')
 
-    for sen in data_X:
-        sen_idx = []
+    for i, sen in enumerate(data_X):
+        sen_idx = np.zeros(max_sen_length, dtype='int32')
 
-        for word in sen:
-            sen_idx.append(word_idx_map[word])
+        for i, word in enumerate(sen):
+            sen_idx[i] = word_idx_map[word]
 
-            sen_idx.append(2)  # append <END> token to it
+        sen_idx[len(sen)-1] = 2  # append <END> token to end of sentence
 
-        converted.append(np.asarray(sen_idx, dtype='int32'))
+        converted[i, :] = sen_idx
 
-    return np.asarray(converted, dtype='int32')
+    return converted
 
 
 def compress_word2vec(W_embed, model):
@@ -211,6 +216,8 @@ if __name__ == '__main__':
     data = load_dataset(pwd)
 
     print "data loaded..."
+
+    print "longest sentence length: ", max_sen_length
 
     model = Word2Vec.load_word2vec_format(pwd + '/GoogleNews-vectors-negative300.bin.gz', binary=True)
 
