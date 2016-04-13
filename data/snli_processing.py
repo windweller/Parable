@@ -189,13 +189,17 @@ if __name__ == '__main__':
 
     pwd = os.path.dirname(os.path.realpath(__file__))
 
+    data = load_dataset(pwd + "/snli_1.0")
+
+    convert_words_to_idx(data['train_sentencegits'])
+    convert_words_to_idx(data['dev_sentences'])
+    convert_words_to_idx(data['test_sentences'])
+
+    print "data loaded..."
+
     model = Word2Vec.load_word2vec_format(pwd + '/GoogleNews-vectors-negative300.bin.gz', binary=True)
 
     print "word2vec loaded..."
-
-    data = load_dataset(pwd + "/snli_1.0")
-
-    print "data loaded..."
 
     # plan: we map words that appears less than 5 times to a special token <UNK>
     # words that are frequent, more than 5 times, and not in word2vec,
@@ -207,10 +211,6 @@ if __name__ == '__main__':
     W_embed = np.random.randn(len(idx_word_map), 300)
 
     W_embed /= 100
-
-    convert_words_to_idx(data['train_sentencegits'])
-    convert_words_to_idx(data['dev_sentences'])
-    convert_words_to_idx(data['test_sentences'])
 
     compress_word2vec(W_embed, model)
 
