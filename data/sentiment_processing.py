@@ -41,8 +41,12 @@ def load_dataset(base_dir, dev_portion=0.05, test_portion=0.05):
     neg_sens_f = os.path.join(base_dir, 'imdb_partial/rt-polarity.neg')
 
     pos_sens = get_data('pos', pos_sens_f)  # 5331 about 20% of the IMDB database (25,000)
-    neg_sens = get_data('pos', neg_sens_f)  # 5331
+    neg_sens = get_data('neg', neg_sens_f)  # 5331
     # so about 40% in total of IMDB database
+
+    # add 1 to max length word
+    global max_sen_length
+    max_sen_length += 1
 
     # now we convert real word sentences into indices
     pos_sens['sentences'] = convert_words_to_idx(pos_sens['sentences'])
@@ -73,6 +77,24 @@ def load_dataset(base_dir, dev_portion=0.05, test_portion=0.05):
     # the rest, starting at test_cut_off, is all training data
     data['X_train'] = np.append(pos_sens['sentences'][train_mask], neg_sens['sentences'][train_mask], axis=0)
     data['y_train'] = np.append(pos_sens['y'][train_mask], neg_sens['y'][train_mask])
+
+    # we shuffle on validation, train, and test
+    # (mostly because we test on batches)
+    train_choices = np.arange(len(data['X_train']))
+    val_choices = np.arange(len(data['X_val']))
+    test_choices = np.arange(len(data['X_test']))
+    np.random.shuffle(train_choices)
+    np.random.shuffle(val_choices)
+    np.random.shuffle(test_choices)
+
+    data['X_train'] = data['X_train'][train_choices]
+    data['y_train'] = data['y_train'][train_choices]
+
+    data['X_val'] = data['X_val'][val_choices]
+    data['y_val'] = data['y_val'][val_choices]
+
+    data['X_test'] = data['X_test'][test_choices]
+    data['y_test'] = data['y_test'][test_choices]
 
     return data
 
@@ -138,7 +160,7 @@ def convert_words_to_idx(data_X):
         for j, word in enumerate(sen):
             sen_idx[j] = word_idx_map[word]
 
-        sen_idx[len(sen) - 1] = 2  # append <END> token to end of sentence
+        sen_idx[len(sen)] = 2  # append <END> token to end of sentence
 
         converted[i, :] = sen_idx
 
@@ -165,14 +187,14 @@ def compress_word2vec(W_embed, model):
         else:
             num_words_not_in += 1
 
-    print "words not in word2vec: ", num_words_not_in
+    print "words not in word2vec: ", num_words_not_in  # 2320
 
 
 def print_stats(threshold=1, display=20):
     """
     print out how many words are equal to or below threshold
 
-    In SNLI we have 12534 rare words (that appeared only once) (almost 33% of the corpus)
+    In IMDB Sentiment we have 11569 rare words (that appeared only once)
 
     display: how many of such words we want to display
     """
@@ -183,7 +205,7 @@ def print_stats(threshold=1, display=20):
             rare_words.append(k)
 
     print "total number of rare words are: ", len(rare_words)
-    # words not in word2vec:  6636
+    # words not in word2vec:  2320
 
     for i in xrange(display):
         print rare_words[i]
@@ -219,33 +241,33 @@ if __name__ == '__main__':
 
     data = load_dataset(pwd)
 
-    # with open(pwd + '/sentiment_vocab.json', 'w') as outfile:
-    #     json.dump({'idx_word_map':idx_word_map, 'word_idx_map':word_idx_map}, outfile)
+    with open(pwd + '/sentiment_vocab.json', 'w') as outfile:
+        json.dump({'idx_word_map':idx_word_map, 'word_idx_map':word_idx_map}, outfile)
 
     print "data loaded..."
 
     print "longest sentence length: ", max_sen_length
 
-    # model = Word2Vec.load_word2vec_format(pwd + '/GoogleNews-vectors-negative300.bin.gz', binary=True)
+    model = Word2Vec.load_word2vec_format(pwd + '/GoogleNews-vectors-negative300.bin.gz', binary=True)
 
     print "word2vec loaded..."
 
     # initialize all embeddings randomly, then we swap out
     # words that appear in Word2Vec (unseen words are initialized randomly)
 
-    # W_embed = np.asarray(np.random.randn(len(idx_word_map), 300), dtype='float32')
-    #
-    # W_embed /= 100
-    #
-    # compress_word2vec(W_embed, model)
-    #
-    # np.savez_compressed(pwd + "/rt_sentiment_data", W_embed=W_embed,
-    #                     X_train=data['X_train'],
-    #                     X_val=data['X_val'],
-    #                     X_test=data['X_test'],
-    #                     y_train=data['y_train'],
-    #                     y_val=data['y_val'],
-    #                     y_test=data['y_test'])
+    W_embed = np.asarray(np.random.randn(len(idx_word_map), 300), dtype='float32')
+
+    W_embed /= 100
+
+    compress_word2vec(W_embed, model)
+
+    np.savez_compressed(pwd + "/rt_sentiment_data", W_embed=W_embed,
+                        X_train=data['X_train'],
+                        X_val=data['X_val'],
+                        X_test=data['X_test'],
+                        y_train=data['y_train'],
+                        y_val=data['y_val'],
+                        y_test=data['y_test'])
 
     end = time.time()
 
