@@ -1,36 +1,17 @@
+"""
+This solver is specifically designed to
+run simple classification on sentiment
+"""
+
 import optim
 import numpy as np
 import theano.tensor as T
 import theano
 
-"""
-Solver will take in
-data and has util functions
-for checking accuracies
-"""
 
-
-class Solver(object):
+class EncoderSolver(object):
     """
-    A Solver encapsulates all the logic necessary for training classification
-    models. The Solver performs stochastic gradient descent using different
-    update rules defined in optim.py.
-
-    The solver accepts both training and validataion data and labels so it can
-    periodically check classification accuracy on both training and validation
-    data to watch out for overfitting.
-
-    To train a model, you will first construct a Solver instance, passing the
-    model, dataset, and various optoins (learning rate, batch size, etc) to the
-    constructor. You will then call the train() method to run the optimization
-    procedure and train the model.
-
-    After the train() method returns, model.params will contain the parameters
-    that performed best on the validation set over the course of training.
-    In addition, the instance variable solver.loss_history will contain a list
-    of all losses encountered during training and the instance variables
-    solver.train_acc_history and solver.val_acc_history will be lists containing
-    the accuracies of the model on the training and validation set at each epoch.
+    RNN Encoder Solver
 
     Example usage might look something like this:
 
@@ -88,10 +69,10 @@ class Solver(object):
             Required arguments:
             - model: A model object conforming to the API described above
             - data: A dictionary of training and validation data with the following:
-              'X_train': Array of shape (N_train, d_1, ..., d_k) giving training images
-              'X_val': Array of shape (N_val, d_1, ..., d_k) giving validation images
-              'y_train': Array of shape (N_train,) giving labels for training images
-              'y_val': Array of shape (N_val,) giving labels for validation images
+              'X_train': Matrix of shape (N, T), T is the max length over all sentences, int32
+              'X_val': Matrix of shape (N, T), T is the max length over all sentences
+              'y_train': Array of shape (N_train,) giving labels for training sentences
+              'y_val': Array of shape (N_val,) giving labels for validation sentences
 
             - symbolic_X: A theano symbolic variable like T.matrix('x') or T.tensor4('X')
                           that corresponds to the shape of X passing in
@@ -115,10 +96,11 @@ class Solver(object):
             - verbose: Boolean; if set to false then no output will be printed during
               training.
             """
+
         self.model = model
-        self.X_train = np.asarray(data['X_train'], dtype='float32')
+        self.X_train = np.asarray(data['X_train'], dtype='int32')
         self.y_train = np.asarray(data['y_train'], dtype='int32')
-        self.X_val = np.asarray(data['X_val'], dtype='float32')
+        self.X_val = np.asarray(data['X_val'], dtype='int32')
         self.y_val = np.asarray(data['y_val'], dtype='int32')
         self.X = symbolic_X  # data, presented as rasterized images
         self.y = symbolic_y  # labels, presented as 1D vector of [int] labels
@@ -132,6 +114,10 @@ class Solver(object):
 
         self.print_every = kwargs.pop('print_every', 10)
         self.verbose = kwargs.pop('verbose', True)
+
+        # we decide on whether we update word embedding
+        # if not, we take it out of the parameter list
+        self.update_word_emb = kwargs.pop('update_word_emb', True)
 
         # Throw an error if there are extra keyword arguments
         if len(kwargs) > 0:
@@ -148,7 +134,7 @@ class Solver(object):
         self._reset()
 
         # constructing train_fn and valid_fn (also used for test_fn)
-        self.train_loss = self.model.loss(self.X, self.y, final_loss=True)
+        self.train_loss = self.model.loss(self.X, self.y)
         self.updates = []
 
         # Perform a parameter update (by param update)
@@ -168,7 +154,7 @@ class Solver(object):
         # However, our validation function follows a different style:
         # We take index slice as input, not actual batch as input
 
-        self.test_scores = self.model.loss(self.X, final_loss=False)  # this is the softmax probability
+        self.test_scores = self.model.loss(self.X)  # this is the softmax probability
         self.test_loss = T.nnet.categorical_crossentropy(self.test_scores, self.y)  # loss
 
         self.test_loss = self.test_loss.mean()
@@ -308,7 +294,7 @@ class Solver(object):
             last_it = (t == num_iterations + 1)
 
             if first_it or last_it or epoch_end:
-                _, train_acc = self.check_accuracy(self.X_train, self.y_train, batch_size=self.batch_size) # , num_samples=1000
+                _, train_acc = self.check_accuracy(self.X_train, self.y_train, batch_size=self.batch_size)  # , num_samples=1000
                 val_loss, val_acc = self.check_accuracy(self.X_val, self.y_val, batch_size=self.batch_size)
                 self.train_acc_history.append(train_acc)
                 self.val_acc_history.append(val_acc)

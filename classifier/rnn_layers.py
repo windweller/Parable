@@ -5,6 +5,7 @@ RNN layers ported from CS231N
 import numpy as np
 import theano
 import theano.tensor as T
+from layers import affine_layer, softmax_layer
 
 
 def rnn_step_forward(x, prev_h, Wx, Wh, b, t=0, all_h=None):
@@ -202,18 +203,6 @@ def lstm_inner_attention_layer(c_s):
     pass
 
 
-def global_attention_layer(source_hs, target_hs):
-    """
-    Inputs:
-    - source_hs: hidden states from the source
-    - target_hs: hidden states from the target
-
-    Returns:
-    - m_target_hs: modified target hidden states
-    """
-    pass
-
-
 def temporal_affine_forward(x, w, b, x_shape, b_shape):
     """
     Forward pass for a temporal affine layer. The input is a set of D-dimensional
@@ -261,3 +250,199 @@ def word_embedding_forward(x, W):
     out = W[x]
 
     return out
+
+def wrap_shared_var(numpy_var, name, borrow):
+    return theano.shared(
+        value=numpy_var,
+        name=name,
+        borrow=borrow
+    )
+
+class RNNEncoder(object):
+    """
+    A RNN classifier framework that can use plain RNN or LSTM cell type
+
+    (should add GRU)
+
+    Just an encoder, with a softmax at the end to classify result into a category
+
+    It lacks a sample method because we don't need it.
+
+    RNN encoder takes an input vector
+
+    The RNN receives input vectors of size D, has a vocab size of V, works on
+    sequences of length T, has an RNN hidden dimension of H, uses word vectors
+    of dimension W, and operates on minibatches of size N.
+
+    Note that we don't use any regularization for the CaptioningRNN.
+    """
+
+    def __init__(self, word_to_idx, idx_to_word, w_emb, max_seq_length=50, batch_size=20,
+                 wordvec_dim=300, hidden_dim=128, label_size=2,
+                 cell_type='rnn', dtype=theano.config.floatX):
+        """
+        Construct a new CaptioningRNN instance.
+
+        Inputs:
+        - word_to_idx: A dictionary giving the vocabulary. It contains V entries,
+          and maps each string to a unique integer in the range [0, V).
+        - wordvec_dim: Dimension W of word vectors.
+        - max_seq_length: TS, the sequence we should process
+        - hidden_dim: Dimension H for the hidden state of the RNN.
+        - label_size: C, how many labels do you have.
+        - cell_type: What type of RNN to use; either 'rnn' or 'lstm'.
+        - dtype: numpy datatype to use; use float32 for training and float64 for
+          numeric gradient checking.
+        """
+        if cell_type not in {'rnn', 'lstm'}:
+            raise ValueError('Invalid cell_type "%s"' % cell_type)
+
+        self.cell_type = cell_type
+        self.dtype = dtype
+        self.word_to_idx = word_to_idx
+        self.idx_to_word = idx_to_word
+        self.hidden_dim = hidden_dim
+        self.batch_size = batch_size
+        self.max_seq_length = max_seq_length
+        self.params = {}
+
+        self.updates = []  # [(key, value)] this carries out non-parameter update rules (for batch norm)
+
+        vocab_size = len(word_to_idx)
+
+        self._null = word_to_idx['<NULL>']
+        self._start = word_to_idx.get('<START>', None)
+        self._end = word_to_idx.get('<END>', None)
+
+        # word vectors are initialized outside
+        self.params['W_embed'] = w_emb
+
+        # Initialize parameters for the RNN
+        dim_mul = {'lstm': 4, 'rnn': 1}[cell_type]
+        self.params['Wx'] = np.random.randn(wordvec_dim, dim_mul * hidden_dim)
+        self.params['Wx'] /= np.sqrt(wordvec_dim)
+        self.params['Wh'] = np.random.randn(hidden_dim, dim_mul * hidden_dim)
+        self.params['Wh'] /= np.sqrt(hidden_dim)
+        self.params['b'] = np.zeros(dim_mul * hidden_dim)
+
+        # projecting last hidden state
+        # from (N, H) to (N, C), C = label_size
+        self.params['W_proj'] = np.random.randn(hidden_dim, label_size)
+        self.params['W_proj'] /= np.sqrt(hidden_dim)
+        self.params['b_proj'] = np.zeros(label_size)
+
+        # Cast parameters to correct dtype
+        for k, v in self.params.iteritems():
+            self.params[k] = v.astype(self.dtype)
+            self.params[k] = wrap_shared_var(self.params[k], k, borrow=True)
+
+    def loss(self, X, y=None, hprev=None, softmax=True):
+        """
+        Compute training-time loss for the RNN. We input image features and
+        ground-truth captions for those images, and use an RNN (or LSTM) to compute
+        loss and gradients on all parameters.
+
+        Inputs:
+        - X: Input sentence, shape (N, T), T is the max length of sequence it's padded to.
+             Each element is in the range 0 <= y[i, t] < V. N is the batch number.
+             We need to trim it down to (N, TS).
+        - y: labels for sentences, (N,)
+        - hprev: (N, H), initial hidden state, when None, it will be initialized to all 0
+        - softmax: bool,
+
+
+        Returns a tuple of:
+        - loss: Scalar loss
+        - grads: Dictionary of gradients parallel to self.params
+
+        """
+
+        mode = 'test' if y is None else 'train'
+
+        # we need to clean out self.updates, if loss() is called again
+        if len(self.updates) != 0:
+            self.updates = []
+
+        # affine transforming last hidden state to softmax
+        # hidden state W_proj: (input_dim, hidden_dim) = (D, H)
+        W_proj, b_proj = self.params['W_proj'], self.params['b_proj']
+
+        # Word embedding matrix
+        W_embed = self.params['W_embed']
+
+        # Input-to-hidden, hidden-to-hidden, and biases for the RNN
+        Wx, Wh, b = self.params['Wx'], self.params['Wh'], self.params['b']
+
+        H = self.hidden_dim
+        N = self.batch_size
+        TS = self.max_seq_length
+
+        loss, grads = 0.0, {}
+        ############################################################################
+        # Implement the forward passes for the SentimentRNN.                       #
+        # In the forward pass it does the following:                               #
+        #                                                                          #
+        # (0) We trim X down to TS max-sequence                                    #
+        # (1) Use a word embedding layer to transform the words in captions_in     #
+        #     from indices to vectors, giving an array of shape (N, T, W).         #
+        # (2) initial hidden state is initialized at zero (wildML, theano official)#
+        #     (N, H)                                                               #
+        # (3) Use either a vanilla RNN or LSTM (depending on self.cell_type) to    #
+        #     process the sequence of input word vectors and produce hidden state  #
+        #     vectors for all timesteps, producing an array of shape (N, T, H).    #
+        # (4) transform the last hidden state with affine transformation           #
+        # (5) Use Softmax to produce a label for the sentence                      #
+        #                                                                          #
+        # In the backward pass you will need to compute the gradient of the loss   #
+        # with respect to all model parameters. Use the loss and grads variables   #
+        # defined above to store loss and gradients; grads[k] should give the      #
+        # gradients for self.params[k].                                            #
+        ############################################################################
+
+        # ===== forward pass =====
+
+        # step (0) CUT X DOWN TO TIMESTEP
+        # X (N, T)
+        X = X[:, :TS]
+
+        # step (1)
+        # X (N, TS)
+        out_word_embedded = word_embedding_forward(X, W_embed)
+
+        # word embedding (N, TS, W)
+
+        # step (2)
+        if hprev is None:
+            hprev = np.zeros((N, H), dtype=self.dtype)
+
+        # hprev (N, H)
+
+        # step (3)
+        hs = None
+        h_states_shapes = (N, TS, H)
+        if self.cell_type == 'rnn':
+            hs = rnn_forward(out_word_embedded, hprev, Wx, Wh, b, h_states_shapes)
+            # last_h : (N, H)
+        elif self.cell_type == 'lstm':
+            hs = lstm_forward(out_word_embedded, hprev, Wx, Wh, b, h_states_shapes)
+
+        last_hs = hs[:, -1, :]
+
+        # step (4)
+        # last_hs: (N, H), W_proj: (H, H), b_proj: (H,)
+        # it shares the same dimensionality of hidden dimension of RNN
+        out_aff = affine_layer(last_hs, W_proj, b_proj)
+
+        # step (5)
+        probs = softmax_layer(out_aff)
+
+        if y is None:
+            out = probs
+        else:
+            out = -T.mean(T.log(probs)[T.arange(y.shape[0]), y])
+
+        ############################################################################
+        #                             END OF YOUR CODE                             #
+        ############################################################################
+
+        return out

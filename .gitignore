@@ -5,6 +5,7 @@ data/*.pos
 data/*.neg
 data/*.csv
 data/story_corpus_16/
+data/rnn_shakespear/
 
 # IntelliJ
 .name

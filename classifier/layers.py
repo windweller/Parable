@@ -195,6 +195,9 @@ def softmax_layer(x):
     Returns a tuple of:
     - loss: Scalar giving the loss
     - dx: Gradient of the loss with respect to x
+
+    - probs: (N, C), has the same shape of X, but dimension C
+             has probability of each class
     """
     probs = T.nnet.softmax(x)
     # loss = -T.mean(T.log(probs)[T.arange(y.shape[0]), y])
