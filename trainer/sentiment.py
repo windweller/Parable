@@ -23,7 +23,7 @@ y = T.ivector('y')
 
 solver = EncoderSolver(encoder,
                        data, X, y,
-                       num_epochs=500, batch_size=batch_size,
+                       num_epochs=100, batch_size=batch_size,
                        update_rule='adam',
                        optim_config={
                            'learning_rate': 1e-2,
