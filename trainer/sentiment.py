@@ -5,11 +5,11 @@ that works on IMDB dataset
 in a file form so it can be run remotely
 """
 
-from classifier.rnn_layers import *
-from classifier.util import *
-from data.sentiment_util import *
+from parable.classifier.rnn_layers import *
+from parable.classifier.util import *
+from parable.data.sentiment_util import *
 import numpy as np
-from classifier.rnn_encoder_solver import EncoderSolver
+from parable.classifier.rnn_encoder_solver import EncoderSolver
 import os
 
 pwd = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
@@ -19,6 +19,14 @@ data = load_data(pwd+'/data/rt_sentiment_data.npz', pwd+'/data/sentiment_vocab.j
 batch_size = 50
 
 encoder = RNNEncoder(data['word_idx_map'], data['idx_word_map'], data['W_embed'], max_seq_length=57, batch_size=batch_size)
+
+num_train = 9500
+whole_data = {
+  'X_train': data['X_train'][:num_train],
+  'y_train': data['y_train'][:num_train],
+  'X_val': data['X_val'][:500],
+  'y_val': data['y_val'][:500],
+}
 
 X = T.imatrix('X')
 y = T.ivector('y')
