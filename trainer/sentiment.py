@@ -12,7 +12,7 @@ import numpy as np
 from classifier.rnn_encoder_solver import EncoderSolver
 import os
 
-pwd = os.path.dirname(os.path.realpath(__file__))
+pwd = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__))), os.pardir)
 
 data = load_data(pwd+'/data/rt_sentiment_data.npz', pwd+'/data/sentiment_vocab.json')
 
