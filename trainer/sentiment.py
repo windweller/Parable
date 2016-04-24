@@ -10,9 +10,11 @@ from classifier.util import *
 from data.sentiment_util import *
 import numpy as np
 from classifier.rnn_encoder_solver import EncoderSolver
+import os
 
+pwd = os.path.dirname(os.path.realpath(__file__))
 
-data = load_data('data/rt_sentiment_data.npz', 'data/sentiment_vocab.json')
+data = load_data(pwd+'/data/rt_sentiment_data.npz', pwd+'/data/sentiment_vocab.json')
 
 batch_size = 50
 
