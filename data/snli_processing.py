@@ -19,6 +19,8 @@ idx_word_map = ['<NULL>', '<UNK>', '<END>']
 # we replace rare words with <UNK>, which shares the same vector
 word_count_map = {}  # length: 34044
 
+max_seq_len = 0
+
 W_embed = None
 
 
@@ -46,7 +48,10 @@ def get_data(category, file_path, data):
         category: 'train', 'dev', or 'test'
         data: pass in the dictionary, and we fill it up inside this function
     """
-    data[category + '_sentences'] = []
+    global max_seq_len
+
+    data[category + '_src_sentences'] = []
+    data[category + '_tgt_sentences'] = []
     data['y_' + category] = []
 
     with open(file_path, 'r') as f:
@@ -54,12 +59,11 @@ def get_data(category, file_path, data):
             json_obj = json._default_decoder.decode(line)
             if json_obj['gold_label'] == '-':  # skipping non-label
                 continue
-            pair = {}
-            pair['sentence1'] = clean_str(json_obj['sentence1'])
-            pair['sentence2'] = clean_str(json_obj['sentence2'])
+            sentence1 = clean_str(json_obj['sentence1'])
+            sentence2 = clean_str(json_obj['sentence2'])
 
-            sentence1_array = pair['sentence1'].split()
-            sentence2_array = pair['sentence2'].split()
+            sentence1_array = sentence1.split()
+            sentence2_array = sentence2.split()
 
             for word in sentence1_array:
                 if word not in word_idx_map:
@@ -79,8 +83,14 @@ def get_data(category, file_path, data):
                 else:
                     word_count_map[word] += 1
 
+            if len(sentence1_array) > max_seq_len:
+                max_seq_len = len(sentence1_array)
+            elif len(sentence2_array) > max_seq_len:
+                max_seq_len = len(sentence2_array)
+
             data['y_' + category].append(int(label_idx_map[json_obj['gold_label']]))
-            data[category + '_sentences'].append(pair)
+            data[category + '_src_sentences'].append(sentence1)
+            data[category + '_tgt_sentences'].append(sentence2)
 
     data['y_' + category] = np.asarray(data['y_' + category], dtype='int32')
 
@@ -99,22 +109,20 @@ def convert_words_to_idx(data_X):
 
     Returns:
     """
-    for pair in data_X:
-        sentence1_idx = []
-        sentence2_idx = []
 
-        for word in decode(pair['sentence1']).split():
-            sentence1_idx.append(word_idx_map[word])
+    converted = np.zeros((len(data_X), max_seq_len), dtype='int32')
 
-        sentence1_idx.append(2)  # append <END> token to it
+    for i, sen in enumerate(data_X):
+        sen_idx = np.zeros(max_seq_len, dtype='int32')
 
-        for word in decode(pair['sentence2']).split():
-            sentence2_idx.append(word_idx_map[word])
+        for j, word in enumerate(decode(sen).split()):
+            sen_idx[j] = word_idx_map[word]
 
-        sentence2_idx.append(2)  # append <END> token to it
+        sen_idx[len(sen)] = word_idx_map['<END>']  # append <END> token to it
 
-        pair['sentence1'] = sentence1_idx
-        pair['sentence2'] = sentence2_idx
+        converted[i, :] = sen_idx
+
+    return converted
 
 
 def compress_word2vec(W_embed, model):
@@ -191,9 +199,15 @@ if __name__ == '__main__':
 
     data = load_dataset(pwd + "/snli_1.0")
 
-    convert_words_to_idx(data['train_sentencegits'])
-    convert_words_to_idx(data['dev_sentences'])
-    convert_words_to_idx(data['test_sentences'])
+    max_seq_len += 1
+
+    data['train_src_sentences'] = convert_words_to_idx(data['train_src_sentences'])
+    data['dev_src_sentences'] = convert_words_to_idx(data['dev_src_sentences'])
+    data['test_src_sentences'] = convert_words_to_idx(data['test_src_sentences'])
+
+    data['train_tgt_sentences'] = convert_words_to_idx(data['train_tgt_sentences'])
+    data['dev_tgt_sentences'] = convert_words_to_idx(data['dev_tgt_sentences'])
+    data['test_tgt_sentences'] = convert_words_to_idx(data['test_tgt_sentences'])
 
     print "data loaded..."
 
@@ -217,13 +231,13 @@ if __name__ == '__main__':
     with open(pwd + '/snli_vocab.json', 'w') as outfile:
         json.dump({idx_word_map: idx_word_map, word_idx_map: word_idx_map}, outfile)
 
-    # TODO: this is not gonna work. Numpy Compress can't solve
-    # TODO: sentence pairing problem (must break them up somehow)
-
     np.savez_compressed(pwd + "/snli_processed", W_embed=W_embed,
-                        train_sentences=data['train_sentences'],
-                        dev_sentences=data['dev_sentences'],
-                        test_sentences=data['test_sentences'],
+                        train_src_sentences=data['train_src_sentences'],
+                        dev_src_sentences=data['dev_src_sentences'],
+                        test_src_sentences=data['test_src_sentences'],
+                        train_tgt_sentences=data['train_tgt_sentences'],
+                        dev_tgt_sentences=data['dev_tgt_sentences'],
+                        test_tgt_sentences=data['test_tgt_sentences'],
                         y_train=data['y_train'],
                         y_dev=data['y_dev'],
                         y_test=data['y_test'])
